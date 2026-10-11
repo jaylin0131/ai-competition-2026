@@ -8,6 +8,7 @@
 | [QKD-Eavesdrop-AI/](QKD-Eavesdrop-AI/) | 大會專題類資電領域組：QKD 鏈路 AI 健康診斷 |
 | [site/](site/) | 團隊時程網站：合併兩份 `tasks.csv` 的甘特圖，成員可勾選完成 |
 | [deploy/](deploy/) | 網站部署說明（Cloudflare Pages＋Supabase）與資料庫 SQL |
+| [functions/](functions/) | Cloudflare Pages 伺服器端程式：團隊密碼、寫入勾選 |
 | `.github/workflows/` | 每日把網站勾選寫回 `tasks.csv` |
 
 - 進度唯一來源：各專案的 `schedule/tasks.csv`

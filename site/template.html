@@ -158,13 +158,22 @@ button, select { font: inherit; color: inherit; }
 .sync.err { color: var(--late); }
 .sync.err::before { background: var(--late); }
 .week-list li { grid-template-columns: 24px 92px 64px 1fr auto; }
-.auth { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; font-size: 14px; }
-.auth .login { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.auth input { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--fg); min-width: 0; width: 240px; max-width: 100%; }
-.auth button { background: var(--fg); color: var(--bg); border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
-.auth #logout { background: transparent; color: var(--muted); border: 1px solid var(--line); }
-.auth .hint { color: var(--muted); font-size: 13px; }
-.auth .who-am-i { font-weight: 700; }
+.auth { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
+.auth .who-am-i { color: var(--fg); font-weight: 700; }
+.auth button { background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
+.auth button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.id-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--fg) 45%, transparent); }
+.id-card { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 24px; width: min(560px, 100%); max-height: calc(100% - 32px); overflow: auto; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
+.id-card h2 { font-size: 22px; }
+.id-card p { margin: 0; color: var(--muted); font-size: 14px; }
+.id-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.id-grid button { text-align: left; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.id-grid button:hover { border-color: var(--fg); }
+.id-grid button[aria-pressed="true"] { border: 2px solid var(--fg); padding: 9px 11px; }
+.id-grid b { font-size: 16px; }
+.id-grid span { font-size: 12px; color: var(--muted); }
+.id-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
+.id-foot button { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; color: var(--fg); }
 footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 
 @media (max-width: 640px) {
@@ -224,6 +233,15 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     <span id="updated"></span>
     <span>勾選「完成」會即時同步給所有成員；任務、日期與負責人來自兩個專案的 schedule/tasks.csv。點任一列可看交付物、相依任務與勾選紀錄。</span>
   </footer>
+</div>
+
+<div class="id-modal" id="id-modal" role="dialog" aria-modal="true" aria-labelledby="id-title" hidden>
+  <div class="id-card">
+    <h2 id="id-title">你是哪一位？</h2>
+    <p>選擇目前的身分，之後在這台裝置上的每一次勾選與取消，都會記錄在這個名字下，所有成員都看得到。換裝置或清除瀏覽器資料後需要重新選擇。</p>
+    <div class="id-grid" id="id-grid"></div>
+    <div class="id-foot"><span class="hint" id="id-hint"></span><button type="button" id="id-skip">先只瀏覽</button></div>
+  </div>
 </div>
 
 <script id="data" type="application/json">__DATA__</script>
@@ -430,6 +448,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   async function toggleDone(k, done) {
     const t = byKey[k];
     if (!t || !B.write || !canWrite) return;
+    if (B.needIdentity && !B.me) { render(); B.askIdentity && B.askIdentity("請先選擇身分，勾選才會記在你的名字下"); return; }
     const prev = OV[k];
     OV[k] = { done, by: B.me || "", at: new Date().toISOString() };
     render();
@@ -439,7 +458,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     } catch (e) {
       if (prev) OV[k] = prev; else delete OV[k];
       render();
-      setSync("err", e && e.denied ? "你沒有寫入權限，請確認登入的 email 在成員名單上" : "沒有存到，請檢查網路後再勾一次");
+      setSync("err", (e && e.msg) || (e && e.denied ? "你沒有寫入權限" : "沒有存到，請檢查網路後再勾一次"));
     }
   }
 
@@ -488,70 +507,81 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     render();
   }
 
-  // Supabase：email 登入連結；成員名單與權限由資料庫的 RLS 規則把關
+  // Supabase（Cloudflare Pages 版）：不收集 email。
+  // 進入網頁先選身分（存在這台裝置的瀏覽器），勾選經由 /api/status 寫入，記錄為這個名字。
+  // 讀取與即時同步用公開金鑰；網站本身由 Cloudflare 的團隊密碼保護。
   async function startSupabase(cfg) {
-    if (!window.supabase || !cfg.url || !cfg.anonKey) { setSync("", "唯讀：網站尚未連上資料庫，只顯示 tasks.csv 的狀態"); return; }
-    const sb = window.supabase.createClient(cfg.url, cfg.anonKey);
-    let channel = null, members = {};
+    const modal = document.getElementById("id-modal");
+    const grid = document.getElementById("id-grid");
+    const hint = document.getElementById("id-hint");
+    const names = new Set(D.team.map(m => m.name));
+    B.needIdentity = true;
+    B.me = names.has(store.get("identity", "")) ? store.get("identity", "") : "";
 
-    const showLogin = msg => {
+    const showBar = () => {
       authEl.hidden = false;
-      authEl.innerHTML = `<form id="login" class="login"><label for="login-email" class="field">登入後才能勾選</label>
-        <input id="login-email" type="email" required placeholder="你的成員 email" autocomplete="email">
-        <button type="submit">寄登入連結</button><span class="hint">${esc(msg || "")}</span></form>`;
-      document.getElementById("login").addEventListener("submit", async e => {
-        e.preventDefault();
-        const email = document.getElementById("login-email").value.trim();
-        const hint = authEl.querySelector(".hint");
-        hint.textContent = "寄送中…";
-        const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-        hint.textContent = error ? "寄送失敗：" + error.message : "已寄出，請到信箱點登入連結（同一個瀏覽器開啟）";
-      });
+      authEl.innerHTML = B.me
+        ? `目前身分：<span class="who-am-i">${esc(B.me)}</span><button type="button" id="id-switch">切換身分</button>`
+        : `尚未選擇身分，只能瀏覽<button type="button" class="primary" id="id-switch">選擇身分</button>`;
+      document.getElementById("id-switch").addEventListener("click", () => B.askIdentity());
     };
-
-    const showUser = email => {
-      authEl.hidden = false;
-      authEl.innerHTML = `<span class="who-am-i">${esc(members[email] || email)}</span><button type="button" id="logout">登出</button>`;
-      document.getElementById("logout").addEventListener("click", () => sb.auth.signOut());
+    const closeModal = () => { modal.hidden = true; document.removeEventListener("keydown", onKey); };
+    const onKey = e => { if (e.key === "Escape") closeModal(); };
+    B.askIdentity = msg => {
+      grid.innerHTML = D.team.map(m => `<button type="button" data-name="${esc(m.name)}" aria-pressed="${m.name === B.me}">
+        <b>${esc(m.name)}</b><span>${esc(m.dept)}・${esc(m.role)}</span></button>`).join("");
+      hint.textContent = msg || "";
+      modal.hidden = false;
+      document.addEventListener("keydown", onKey);
+      (grid.querySelector('[aria-pressed="true"]') || grid.querySelector("button")).focus();
     };
-
-    B.names = async ids => Object.fromEntries(ids.map(id => [id, id === B.me ? "你" : (members[id] || id)]));
-    B.write = async (t, done) => {
-      const { error } = await sb.from("task_status").upsert({ key: t.k, project: t.p, task_id: t.id, done });
-      if (error) throw { denied: error.code === "42501" || /row-level security/i.test(error.message) };
-    };
-
-    async function enter(session) {
-      if (channel) { sb.removeChannel(channel); channel = null; }
-      if (!session) {
-        canWrite = false; B.me = ""; applyRows([]);
-        setSync("", "未登入：只顯示 tasks.csv 的狀態");
-        showLogin();
-        return;
-      }
-      B.me = (session.user.email || "").toLowerCase();
-      const m = await sb.from("members").select("email,name");
-      members = Object.fromEntries((m.data || []).map(r => [r.email.toLowerCase(), r.name]));
-      canWrite = !!members[B.me];
-      showUser(B.me);
-      if (!canWrite) { setSync("err", "這個 email 不在成員名單上，請隊長加入後再登入"); applyRows([]); return; }
-      const load = async () => {
-        const { data, error } = await sb.from("task_status").select("key,done,updated_by_email,updated_at");
-        if (error) { setSync("err", "讀取失敗：" + error.message); return; }
-        applyRows(data.map(r => ({ k: r.key, done: r.done, by: r.updated_by_email, at: r.updated_at })));
-      };
-      await load();
-      channel = sb.channel("task_status")
-        .on("postgres_changes", { event: "*", schema: "public", table: "task_status" }, load)
-        .subscribe(st => {
-          if (st === "SUBSCRIBED") setSync("live", "已連線：勾選會即時同步給所有成員");
-          else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") setSync("ro", "即時同步中斷：勾選仍會儲存，重新整理可看到別人的更新");
-        });
-    }
-
-    sb.auth.onAuthStateChange((event, session) => {
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(() => enter(session), 0);
+    grid.addEventListener("click", e => {
+      const b = e.target.closest("button[data-name]");
+      if (!b) return;
+      const first = !B.me;
+      B.me = b.dataset.name;
+      store.set("identity", B.me);
+      // 第一次選身分時，順便把成員篩選設成自己
+      if (first && !state.person) { state.person = B.me; sel.value = B.me; store.set("person", B.me); }
+      closeModal(); showBar(); render();
     });
+    document.getElementById("id-skip").addEventListener("click", closeModal);
+    showBar();
+    if (!B.me) B.askIdentity();
+
+    B.names = async ids => Object.fromEntries(ids.map(id => [id, id === B.me ? id + "（你）" : id]));
+
+    if (!window.supabase || !cfg.url || !cfg.anonKey) { setSync("", "唯讀：網站尚未連上資料庫，只顯示 tasks.csv 的狀態"); return; }
+    const sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+    B.write = async (t, done) => {
+      let res;
+      try {
+        res = await fetch("/api/status", {
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+          body: JSON.stringify({ key: t.k, done, by: B.me })
+        });
+      } catch (e) { throw { msg: "沒有存到，請檢查網路後再勾一次" }; }
+      if (!res.ok) {
+        let detail = "";
+        try { detail = (await res.json()).error || ""; } catch (e) {}
+        throw { msg: res.status === 401 ? "團隊密碼已失效，請重新整理頁面" : "沒有存到：" + (detail || "伺服器錯誤 " + res.status) };
+      }
+    };
+
+    const load = async () => {
+      const { data, error } = await sb.from("task_status").select("key,done,updated_by_name,updated_at");
+      if (error) { setSync("err", "讀取失敗：" + error.message); return; }
+      applyRows(data.map(r => ({ k: r.key, done: r.done, by: r.updated_by_name, at: r.updated_at })));
+    };
+    canWrite = true;
+    await load();
+    sb.channel("task_status")
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_status" }, load)
+      .subscribe(st => {
+        if (st === "SUBSCRIBED") setSync("live", "已連線：勾選會即時同步給所有成員");
+        else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") setSync("ro", "即時同步中斷：勾選仍會儲存，重新整理可看到別人的更新");
+      });
   }
 
   const cfg = D.backend || { mode: "artifact" };
