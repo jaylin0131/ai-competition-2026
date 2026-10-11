@@ -10,11 +10,8 @@
 | `build_site.py` | 讀兩份 tasks.csv 與 `QKD-Eavesdrop-AI/schedule/team.csv`，產生網頁 |
 | `sync_status.py` | 把網站勾選寫回 tasks.csv（GitHub Actions 每天執行） |
 
-同一份網頁有兩種版本：
+建置指令（Cloudflare 每次 push 後自動執行）：`python3 site/build_site.py --mode supabase --out site/dist/index.html`
 
-| 版本 | 指令 | 勾選存在哪 |
-|---|---|---|
-| Cloudflare Pages（正式） | `python3 site/build_site.py --mode supabase --out site/dist/index.html` | Supabase；進入時從選單選身分（不收集 email、沒有密碼），寫入經 `functions/api/status.js`。部署步驟見 [deploy/README.md](../deploy/README.md) |
-| Claude Artifact（舊版） | `python3 site/build_site.py` → 發布 `site/index.html` | claude.ai 的 Artifact 資料庫，網址 https://claude.ai/artifact/RjNqdJdi1Y2gCYspS18vbV |
+勾選存在 Supabase；進入時從選單選身分（不收集 email、沒有密碼），寫入經 `functions/api/status.js`。部署步驟見 [deploy/README.md](../deploy/README.md)。產生出來的 `dist/` 不進版控，不要手改。
 
-產生出來的 `index.html`、`dist/` 不進版控，不要手改。
+> 10/11 前曾有 Claude Artifact 版（claude.ai 連結），已停用並刪除，統一使用上面的網址。

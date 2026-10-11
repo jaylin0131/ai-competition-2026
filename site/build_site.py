@@ -1,19 +1,17 @@
-"""把兩個專案的 schedule/tasks.csv 合併成團隊時程網站（site/index.html）。
+"""把兩個專案的 schedule/tasks.csv 合併成團隊時程網站（site/dist/index.html）。
 
-用法（在儲存庫根目錄執行）：
-    python3 site/build_site.py                                   # Claude Artifact 版 → site/index.html
-    python3 site/build_site.py --mode supabase --out site/dist/index.html   # Cloudflare Pages 版
+用法（在儲存庫根目錄執行；Cloudflare 每次 push 後自動執行同一行）：
+    python3 site/build_site.py --mode supabase --out site/dist/index.html
 
-Supabase 版從環境變數讀 SUPABASE_URL、SUPABASE_ANON_KEY（公開金鑰，本來就會出現在網頁裡）；
-沒設定時網站仍可建置，但只顯示 tasks.csv 的狀態、不能勾選。
+Supabase 連線資訊在執行時由 worker/index.js 的 /config.js 提供；建置時若有 SUPABASE_URL、
+SUPABASE_ANON_KEY 環境變數（Pages 版）則直接嵌入網頁。
 
 資料來源（唯一來源，網站不手改）：
 - JNC-AIoT/schedule/tasks.csv
 - QKD-Eavesdrop-AI/schedule/tasks.csv
 - QKD-Eavesdrop-AI/schedule/team.csv（名冊）
 
-Artifact 版：產生後把 site/index.html 重新發布到同一個 Artifact 網址。
-Cloudflare 版：push 到 GitHub 後由 Cloudflare Pages 自動建置部署。
+網站：https://ai-competition-schedule.jaylego0810.workers.dev/
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SITE = Path(__file__).resolve().parent
 TEMPLATE = SITE / "template.html"
-OUT = SITE / "index.html"
+OUT = SITE / "dist" / "index.html"
 SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
 
 PROJECTS = [
@@ -77,7 +75,8 @@ def last_change(fallback_mtime: float) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=("artifact", "supabase"), default="artifact")
+    # --mode 只剩 supabase，保留參數讓 Cloudflare 的建置命令不必修改
+    ap.add_argument("--mode", choices=("supabase",), default="supabase")
     ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args()
 
@@ -92,11 +91,9 @@ def main() -> None:
     with team_path.open(encoding="utf-8") as f:
         team = [{"name": r["name"], "dept": r["dept"], "role": r["role"]} for r in csv.DictReader(f)]
 
-    backend = {"mode": args.mode}
-    if args.mode == "supabase":
-        backend |= {"url": os.environ.get("SUPABASE_URL", "").strip(), "anonKey": os.environ.get("SUPABASE_ANON_KEY", "").strip()}
-        if not (backend["url"] and backend["anonKey"]):
-            print("提示：建置時沒有 SUPABASE_URL／SUPABASE_ANON_KEY，網頁會在執行時改讀 /config.js（Workers 版）")
+    backend = {"url": os.environ.get("SUPABASE_URL", "").strip(), "anonKey": os.environ.get("SUPABASE_ANON_KEY", "").strip()}
+    if not (backend["url"] and backend["anonKey"]):
+        print("提示：建置時沒有 SUPABASE_URL／SUPABASE_ANON_KEY，網頁會在執行時改讀 /config.js（Workers 版）")
 
     data = {
         "backend": backend,
@@ -113,18 +110,16 @@ def main() -> None:
     }
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     # Workers 版：/config.js 由 worker/index.js 在執行時提供連線資訊（Pages 版沒有這支檔案，會改用建置時嵌入的值）
-    head = f'<script src="/config.js"></script><script src="{SUPABASE_JS}"></script>' if args.mode == "supabase" else ""
-    html = TEMPLATE.read_text(encoding="utf-8").replace("__DATA__", payload).replace("<!--__HEAD__-->", head)
-    if args.mode == "supabase":
-        # 獨立網站需要完整文件；Artifact 版由發布工具包上外框
-        html = ('<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">'
-                '<meta name="viewport" content="width=device-width,initial-scale=1">'
-                '<meta name="robots" content="noindex">'
-                f'</head><body>{html}</body></html>')
+    head = f'<script src="/config.js"></script><script src="{SUPABASE_JS}"></script>'
+    body = TEMPLATE.read_text(encoding="utf-8").replace("__DATA__", payload).replace("<!--__HEAD__-->", head)
+    html = ('<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<meta name="robots" content="noindex">'
+            f'</head><body>{body}</body></html>')
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(html, encoding="utf-8")
     n = sum(len(p["tasks"]) for p in projects)
-    print(f"已產生 {args.out}（{args.mode}）：{len(projects)} 個專案、{n} 項任務、{len(team)} 位成員（資料時間 {data['updated']}）")
+    print(f"已產生 {args.out}：{len(projects)} 個專案、{n} 項任務、{len(team)} 位成員（資料時間 {data['updated']}）")
 
 
 if __name__ == "__main__":

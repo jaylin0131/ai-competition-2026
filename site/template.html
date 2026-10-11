@@ -274,7 +274,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   const X = n => (n - START) * PX;
 
   // 成員勾選的完成狀態，覆蓋 tasks.csv 的狀態。key = <作品>_<編號>
-  // 後端二選一：Claude Artifact 的共用資料庫，或 Supabase（Cloudflare Pages 版）
+  // 勾選狀態存在 Supabase，經由 /api/status 寫入
   const OV = {};
   let canWrite = false;
   const B = { write: null, names: async () => ({}) };
@@ -485,30 +485,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     render();
   };
 
-  // Claude Artifact：共用資料庫 status/<key>，身分由 claude.ai 帳號提供
-  async function startArtifact() {
-    const c = window.claude;
-    if (!c || !c.use) { setSync("", "離線檢視：只顯示 tasks.csv 的狀態"); return; }
-    const [db, u] = await Promise.all([c.use("db"), c.use("user")]);
-    if (!db) { setSync("", "未登入：只顯示 tasks.csv 的狀態，登入後才能勾選"); return; }
-    try { B.me = u ? await u.id() : ""; } catch (e) {}
-    let w = null;
-    try { w = u ? await u.can("data.write") : null; } catch (e) {}
-    canWrite = w !== false;
-    B.write = (t, done, at) => db.collection("status").doc(t.k).set({ done, by: B.me || "", at, project: t.p, task: t.id })
-      .catch(e => { throw { denied: e && e.code === "not_granted" }; });
-    B.names = async ids => {
-      if (!u) return {};
-      const ps = await u.profiles(ids);
-      return Object.fromEntries(ids.map(id => [id, ps[id] && (ps[id].isMe ? "你" : ps[id].name)]));
-    };
-    setSync(canWrite ? "live" : "ro", canWrite ? "已連線：勾選會即時同步給所有成員" : "唯讀：你沒有編輯權限");
-    db.collection("status").onSnapshot(snap => applyRows(snap.docs.map(d => ({ k: d.id, ...(d.data() || {}) }))),
-      () => setSync("err", "同步中斷，重新整理頁面再試"));
-    render();
-  }
-
-  // Supabase（Cloudflare Pages 版）：不收集 email。
+  // Supabase：不收集 email。
   // 進入網頁先選身分（存在這台裝置的瀏覽器），勾選經由 /api/status 寫入，記錄為這個名字。
   // 讀取與即時同步用公開金鑰。
   async function startSupabase(cfg) {
@@ -586,7 +563,6 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
       });
   }
 
-  const cfg = D.backend || { mode: "artifact" };
-  (cfg.mode === "supabase" ? startSupabase(cfg) : startArtifact()).catch(() => setSync("err", "連線失敗，重新整理頁面再試"));
+  startSupabase(D.backend || {}).catch(() => setSync("err", "連線失敗，重新整理頁面再試"));
 })();
 </script>
