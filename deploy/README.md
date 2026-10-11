@@ -1,7 +1,7 @@
 # 團隊時程網站部署：Cloudflare Pages＋Supabase（不收集 email）
 
 完成後：
-- 網址 `https://<專案名稱>.pages.dev`，打開時要輸入**團隊密碼**（瀏覽器會記住）
+- 網址 `https://ai-competition-schedule.<子網域>.workers.dev`（或 Pages 的 `.pages.dev`），打開時要輸入**團隊密碼**（瀏覽器會記住）
 - 第一次進入選擇「你是哪一位」，之後在甘特圖上勾選完成，其他人即時看到，每次勾選與取消都記錄身分與時間
 - 每天台灣時間 23:00，GitHub Actions 把勾選寫回兩個專案的 `tasks.csv`，並重產甘特圖
 - 任何人改 `tasks.csv` 並 push，Cloudflare 會自動重新部署
@@ -10,14 +10,14 @@
 | 服務 | 用途 | 費用 |
 |---|---|---|
 | GitHub（私人儲存庫） | 程式碼、`tasks.csv`、每日同步排程 | 免費 |
-| Cloudflare Pages | 放網站、團隊密碼、寫入勾選的伺服器端程式（`functions/`） | 免費 |
+| Cloudflare Workers（或 Pages） | 放網站、團隊密碼、寫入勾選的伺服器端程式（`worker/`、`functions/`） | 免費 |
 | Supabase | 存勾選狀態與紀錄、即時同步 | 免費（7 天無存取會暫停，每日同步會避免） |
 
 ## 安全設計（為什麼這樣做）
 
 | 誰 | 能做什麼 | 怎麼把關 |
 |---|---|---|
-| 沒有團隊密碼的人 | 什麼都看不到 | `functions/_middleware.js` 擋住整個網站與 `/api` |
+| 沒有團隊密碼的人 | 什麼都看不到 | `functions/_middleware.js`（Workers 由 `worker/index.js` 呼叫）擋住整個網站與 `/api` |
 | 有密碼的成員 | 看甘特圖、勾選完成 | 勾選送到 `/api/status`，由伺服器用私密金鑰寫入 Supabase |
 | 直接連 Supabase 的人 | 最多只能讀勾選狀態，不能寫 | 資料表只開放讀取；寫入只有私密金鑰能做 |
 
@@ -46,33 +46,49 @@
 
 ---
 
-## 3. Cloudflare Pages：連接儲存庫並部署
+## 3. Cloudflare：連接儲存庫並部署
 
-1. 到 https://dash.cloudflare.com 登入 → **Workers & Pages → Create → Pages → Connect to Git**，授權 GitHub 並選 `ai-competition-2026`。
-2. 建置設定：
+Cloudflare 現在預設走 **Workers** 建立流程（畫面標題「設定您的應用程式」），本儲存庫兩種都支援，建議用 Workers。
+
+### 3-A. Workers（建議）
+
+1. https://dash.cloudflare.com → **Workers & Pages → 建立 → 匯入存放庫（GitHub）**，選 `ai-competition-2026`。
+2. 「設定您的應用程式」畫面：
 
 | 欄位 | 值 |
 |---|---|
-| Production branch | `main` |
+| 專案名稱 | `ai-competition-schedule`（必須和 `wrangler.jsonc` 的 `name` 相同） |
+| 組建命令 | `python3 site/build_site.py --mode supabase --out site/dist/index.html` |
+| 部署命令 | `npx wrangler deploy`（預設值） |
+| 預覽指令 | `npx wrangler preview`（預設值） |
+| 啟用預覽建置 | 可開可關；預覽網址同樣受團隊密碼保護 |
+
+   按 **部署**。第一次部署完成後打開網址會看到「網站尚未設定 SITE_PASSWORD」，這是正常的。
+
+3. 到該 Worker → **設定 → 變數和秘密 → 新增**：
+
+| 類型 | 名稱 | 值 |
+|---|---|---|
+| 秘密 | `SITE_PASSWORD` | 第 2 步的團隊密碼 |
+| 秘密 | `SUPABASE_SERVICE_KEY` | 第 1 步的 service_role 金鑰 |
+| 文字 | `SUPABASE_URL` | 第 1 步的 Project URL |
+| 文字 | `SUPABASE_ANON_KEY` | 第 1 步的 anon public 金鑰 |
+
+   儲存後立即生效（`wrangler.jsonc` 設了 `keep_vars`，之後自動部署不會清掉這些變數）。網址是 `https://ai-competition-schedule.<你的子網域>.workers.dev`，在 Worker 首頁可看到。
+
+4. 之後只要 push 到 `main`（包含每日同步的 commit），Cloudflare 都會自動重新建置部署。
+
+### 3-B. Pages（替代做法）
+
+在「建立」頁面底部找 Pages 入口 → **Connect to Git**：
+
+| 欄位 | 值 |
+|---|---|
 | Framework preset | `None` |
 | Build command | `python3 site/build_site.py --mode supabase --out site/dist/index.html` |
 | Build output directory | `site/dist` |
-| Root directory | 留空（儲存庫根目錄，`functions/` 要在這裡才會被部署） |
 
-3. **Environment variables**（Production 與 Preview 都要加；私密的兩個請按 **Encrypt**）：
-
-| 名稱 | 值 | 加密 |
-|---|---|---|
-| `SUPABASE_URL` | 第 1 步的 Project URL | 否 |
-| `SUPABASE_ANON_KEY` | 第 1 步的 anon public 金鑰 | 否 |
-| `SUPABASE_SERVICE_KEY` | 第 1 步的 service_role 金鑰 | **是** |
-| `SITE_PASSWORD` | 第 2 步的團隊密碼 | **是** |
-| `PYTHON_VERSION` | `3.12` | 否 |
-
-4. **Save and Deploy**。完成後得到 `https://<專案名稱>.pages.dev`。
-5. 之後只要 push 到 `main`（包含每日同步的 commit），Cloudflare 都會自動重新部署。
-
-> 建置紀錄若出現「警告：沒有設定 SUPABASE_URL」，代表環境變數沒加到，網站會是唯讀。改了環境變數之後要到 **Deployments → Retry deployment** 才會生效。
+環境變數（Production 與 Preview 都加，私密的按 Encrypt）：`SUPABASE_URL`、`SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_KEY`（加密）、`SITE_PASSWORD`（加密）、`PYTHON_VERSION=3.12`。Pages 會使用 `functions/` 資料夾，改了環境變數要 **Retry deployment** 才生效。
 
 ---
 
@@ -106,13 +122,13 @@
 | 新增或更換成員 | 改 `QKD-Eavesdrop-AI/schedule/team.csv` 並 commit，身分選單會自動更新 |
 | 看誰勾了什麼 | 網頁點開任務列；或 Supabase **Table Editor → task_status_log** |
 | 立刻寫回 tasks.csv | GitHub Actions 手動執行「同步網頁勾選到 tasks.csv」 |
-| 換團隊密碼 | Cloudflare 改 `SITE_PASSWORD` → Retry deployment → 私訊成員新密碼 |
+| 換團隊密碼 | Cloudflare 改 `SITE_PASSWORD`（Pages 版要 Retry deployment）→ 私訊成員新密碼 |
 
 ## 疑難排解
 
 | 狀況 | 原因與處理 |
 |---|---|
-| 打開網址顯示「網站尚未設定 SITE_PASSWORD」 | Cloudflare 環境變數沒加，或加了沒重新部署 |
+| 打開網址顯示「網站尚未設定 SITE_PASSWORD」 | Worker 的「變數和秘密」沒加 `SITE_PASSWORD`（Pages 版：加了要重新部署） |
 | 一直跳出密碼視窗 | 密碼打錯；注意大小寫與全形半形 |
 | 勾選後顯示「沒有存到：網站尚未設定資料庫」 | Cloudflare 缺 `SUPABASE_URL` 或 `SUPABASE_SERVICE_KEY` |
 | 勾選後顯示「沒有存到：資料庫寫入失敗」 | `supabase.sql` 沒執行成功，或 service_role 金鑰貼錯 |

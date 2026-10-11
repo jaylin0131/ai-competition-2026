@@ -94,7 +94,7 @@ def main() -> None:
     if args.mode == "supabase":
         backend |= {"url": os.environ.get("SUPABASE_URL", "").strip(), "anonKey": os.environ.get("SUPABASE_ANON_KEY", "").strip()}
         if not (backend["url"] and backend["anonKey"]):
-            print("警告：沒有設定 SUPABASE_URL／SUPABASE_ANON_KEY，網站會是唯讀")
+            print("提示：建置時沒有 SUPABASE_URL／SUPABASE_ANON_KEY，網頁會在執行時改讀 /config.js（Workers 版）")
 
     data = {
         "backend": backend,
@@ -110,7 +110,8 @@ def main() -> None:
         ],
     }
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
-    head = f'<script src="{SUPABASE_JS}"></script>' if args.mode == "supabase" else ""
+    # Workers 版：/config.js 由 worker/index.js 在執行時提供連線資訊（Pages 版沒有這支檔案，會改用建置時嵌入的值）
+    head = f'<script src="/config.js"></script><script src="{SUPABASE_JS}"></script>' if args.mode == "supabase" else ""
     html = TEMPLATE.read_text(encoding="utf-8").replace("__DATA__", payload).replace("<!--__HEAD__-->", head)
     if args.mode == "supabase":
         # 獨立網站需要完整文件；Artifact 版由發布工具包上外框

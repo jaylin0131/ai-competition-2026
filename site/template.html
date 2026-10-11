@@ -511,6 +511,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   // 進入網頁先選身分（存在這台裝置的瀏覽器），勾選經由 /api/status 寫入，記錄為這個名字。
   // 讀取與即時同步用公開金鑰；網站本身由 Cloudflare 的團隊密碼保護。
   async function startSupabase(cfg) {
+    if ((!cfg.url || !cfg.anonKey) && window.SITE_CONFIG) cfg = { ...cfg, ...window.SITE_CONFIG };
     const modal = document.getElementById("id-modal");
     const grid = document.getElementById("id-grid");
     const hint = document.getElementById("id-hint");
