@@ -15,7 +15,6 @@
   --qkd: #2858A3;
   --late: #B42318;
   --ok: #2E7D4F;
-  --exam: #F6EBD3;
   --today: #B42318;
   --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -24,13 +23,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0F131A; --surface: #171D27; --sunken: #121720; --fg: #E5E8EE; --muted: #9AA3B3; --line: #283040;
-    --jnc: #E89356; --qkd: #79A6EA; --late: #F2826F; --ok: #61C48E; --exam: #2A2416; --today: #F2826F;
+    --jnc: #E89356; --qkd: #79A6EA; --late: #F2826F; --ok: #61C48E; --today: #F2826F;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0F131A; --surface: #171D27; --sunken: #121720; --fg: #E5E8EE; --muted: #9AA3B3; --line: #283040;
-  --jnc: #E89356; --qkd: #79A6EA; --late: #F2826F; --ok: #61C48E; --exam: #2A2416; --today: #F2826F;
+  --jnc: #E89356; --qkd: #79A6EA; --late: #F2826F; --ok: #61C48E; --today: #F2826F;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -133,11 +132,9 @@ button, select { font: inherit; color: inherit; }
 .tick { position: absolute; bottom: 6px; font-size: 12px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; font-family: var(--font-mono); }
 .month { position: absolute; top: 6px; font-size: 13px; font-weight: 700; }
 .overlay { position: absolute; top: 0; bottom: 0; pointer-events: none; z-index: 1; }
-.overlay.exam { background: var(--exam); }
 .overlay.grid { border-left: 1px solid var(--line); }
 .overlay.today { border-left: 2px solid var(--today); z-index: 2; }
 .today-flag { position: absolute; top: 4px; font-size: 12px; font-weight: 700; color: var(--today); transform: translateX(4px); white-space: nowrap; }
-.exam-flag { position: absolute; bottom: 24px; font-size: 12px; color: var(--muted); white-space: nowrap; transform: translateX(4px); }
 .row > .lab, .row > .track { position: relative; z-index: auto; }
 .row > .lab { position: sticky; z-index: 3; }
 .track { z-index: 2; }
@@ -370,8 +367,6 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   function overlays(labelW) {
     let h = "";
     for (let n = START; n <= END; n++) if (new Date(n * 864e5).getUTCDay() === 1) h += `<div class="overlay grid" style="left:${labelW + X(n)}px"></div>`;
-    const [ex0, ex1] = D.exam.map(dn);
-    h += `<div class="overlay exam" style="left:${labelW + X(ex0)}px;width:${(ex1 - ex0 + 1) * PX}px"><span class="exam-flag">期中考週（暫定）</span></div>`;
     if (TODAY >= START && TODAY <= END) h += `<div class="overlay today" style="left:${labelW + X(TODAY) + PX / 2}px"><span class="today-flag">今天 ${md(TODAY)}</span></div>`;
     return h;
   }

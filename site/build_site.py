@@ -104,7 +104,6 @@ def main() -> None:
         "projects": projects,
         "team": team,
         "extraIdentities": EXTRA_IDENTITIES,
-        "exam": ["2026-11-02", "2026-11-13"],
         "keyDates": [
             {"date": "2026-11-28", "label": "隊內送件"},
             {"date": "2026-12-01", "label": "報名截止"},
