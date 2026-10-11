@@ -3,7 +3,7 @@ S01,P0 準備,P1,周冠辰,整理比賽規則與企業命題,2026-10-08,2026-10-
 S02,P0 準備,P1,周冠辰,撰寫 AI 分析與 6 人分工規劃 v2,2026-10-09,2026-10-09,S01,done,docs/銘祥科技命題_AI分析與6人分工規劃_v2.pdf
 S03,P0 準備,P2,許程景、林子桀,下載 7 個 CSV、建立專案資料夾,2026-10-11,2026-10-11,S02,done,data/raw/SOURCES.md
 S04,P0 準備,P2,許程景、林子桀,共用讀檔函式與資料字典,2026-10-11,2026-10-11,S03,done,common/load_jnc.py；docs/data-dictionary.md
-S05,P0 準備,全員,全員,確認名冊與角色（P5、P6 暫定）、指導老師,2026-10-11,2026-10-12,S02,doing,docs/decisions-pending.md
+S05,P0 準備,全員,全員,確認名冊與角色（P5、P6 暫定）、指導老師,2026-10-11,2026-10-12,S02,done,docs/decisions-pending.md
 S08,P0 準備,全員,全員,安裝開發環境（requirements.txt）,2026-10-13,2026-10-14,S05,todo,每人可執行 scripts/prepare_data.py
 S09,P0 準備,全員,全員,7 組 CSV 資料品質報告（每組 1 頁：缺值、異常值、故障型態）,2026-10-13,2026-10-18,S08,todo,notes/eda/
 S10,P0 準備,全員,全員,定稿模組 JSON 介面與標準決策資料格式,2026-10-14,2026-10-18,S08,todo,docs/architecture.md

@@ -2,22 +2,23 @@ id,phase,group,owner,task,start,end,depends,status,deliverable
 T01,P0 準備,C,,整理比賽規則與題目評估,2026-10-08,2026-10-08,,done,docs/competition-rules.md
 T02,P0 準備,C,,撰寫專案計畫書,2026-10-08,2026-10-08,T01,done,docs/project-plan.md
 T03,P0 準備,C,,建立專案資料夾與甘特圖,2026-10-11,2026-10-11,T02,done,schedule/gantt.html
-T04,P0 準備,全員,全員,名冊已定 6 人；確認組內分工（D13）與隊伍關係（D2）,2026-10-11,2026-10-12,T02,doing,docs/decisions-pending.md
-T07,P0 準備,A+B,許程景、王端宏,定稿 CSV 規格 v2（七類、一回合一列；D5、D7、D9）,2026-10-12,2026-10-14,T02,todo,docs/csv-schema.md
+T04,P0 準備,全員,全員,名冊與組別確認,2026-10-11,2026-10-12,T02,done,docs/decisions-pending.md
+T07,P0 準備,A+B,許程景、王端宏,確認 CSV v1 固定欄位、五類標籤與分階段交付（10/18 三類、10/25 五類；真值不進模型）,2026-10-12,2026-10-15,T02,todo,docs/csv-format.md；A/B 確認 10/18 basic 三類、10/25 diagnostic 五類，真值不進模型
 T08,P0 準備,A,許程景、林子桀、周冠辰,取得並研讀老師的三支模擬程式,2026-10-12,2026-10-14,T04,todo,sim/reference/
 T09,P0 準備,全員,全員,安裝開發環境（requirements.txt）,2026-10-13,2026-10-14,T04,todo,每人可執行 python -m pytest
-M1,P0 準備,全員,何名綸,里程碑：CSV 規格 v2 定稿、分工確定,2026-10-14,2026-10-14,T07;T04,todo,
-A1,P1 階段一,A,許程景、林子桀,基本 BB84＋單元測試（無雜訊 QBER≈0、全攔截≈25%）,2026-10-13,2026-10-18,T08,todo,sim/bb84.py；tests/test_bb84.py
-B1,P1 階段一,B,王端宏,依規格產生假資料、跑通流程,2026-10-13,2026-10-17,T07,todo,ml/fake_data.py
-A2,P1 階段一,A,林子桀、周冠辰,截取重送、光纖老化、對準漂移＋一回合一列 CSV v1,2026-10-15,2026-10-21,A1,todo,data/raw/dataset_v1.csv
+M1,P0 準備,A+B,許程景、王端宏、何名綸,里程碑：A/B 確認 CSV v1 固定欄位、五類標籤與分階段交付,2026-10-15,2026-10-15,T07;T04,todo,docs/csv-format.md；B 組確認 10/18 basic 三類、10/25 diagnostic 五類，真值不進模型
+T10,P0 準備,A,林子桀、許程景、周冠辰,A 組支援任務認領與時間確認,2026-10-12,2026-10-15,,todo,林子桀、周冠辰回覆可投入時間並認領物理測試或文件審查；確認後再更新相關 A 組任務負責人
+A1,P1 階段一,A,許程景,basic：理想單光子 BB84、簡化去極化、完整攔截重送與三類 CSV v1,2026-10-13,2026-10-18,,todo,src/a_group/generate_bb84_dataset.py；tests/test_csv_v1.py；data/qkd_dataset.csv（basic）；固定種子測試：理想 QBER=0、基底匹配約 50%、完整攔截 QBER 約 25%
+B1,P1 階段一,B,王端宏,讀取 A 組 basic CSV，驗證欄位與完整 run_id 切分,2026-10-19,2026-10-20,A1,todo,src/b_group/train_decision_tree.py；讀取 data/qkd_dataset.csv、按完整 run_id 切分並印出混淆矩陣；真值檔不得作模型輸入
+A2,P1 階段一,A,許程景,diagnostic：距離損耗、逐區塊光纖老化、偏振漂移與部分攔截；五類 CSV v1,2026-10-19,2026-10-25,A1,todo,src/a_group/generate_bb84_dataset.py；tests/test_csv_v1.py；data/qkd_dataset.csv（diagnostic）；驗證純損耗 QBER=0、部分攔截約 f/4、run 時序可重建與真值隔離
 B2,P1 階段一,B,何名綸,固定門檻與指數平滑基準線,2026-10-15,2026-10-20,B1,todo,ml/baseline.py
 B3,P1 階段一,B,王端宏、何名綸,階段一比較：協定門檻 vs 基準線 vs 決策樹,2026-10-19,2026-10-25,A2;B2,todo,reports/
 C1,P1 階段一,C,范語芸,Streamlit 儀表板雛形（先接假模型）,2026-10-19,2026-10-31,M1,todo,app/dashboard.py
 C2,P1 階段一,C,周冠辰、范語芸,本地 LLM 實測（Gemma 4 E4B、TAIDE 12B 各十題）,2026-10-14,2026-10-18,T09,todo,notes/llm-test.md
-M2,P1 階段一,全員,何名綸,里程碑：階段一完成（比較表）,2026-10-25,2026-10-25,B3,todo,比較表
-M3,P1 階段一,全員,何名綸,里程碑：10/31 檢查點（未達標就停在階段一）,2026-10-31,2026-10-31,M2;C1,todo,
-A3,P2 階段二,A,許程景、林子桀,誘騙態（μ、ν、真空）＋有限統計、故障並存,2026-10-26,2026-11-04,A2,todo,sim/bb84.py
-A4,P2 階段二,A,周冠辰、許程景,雜散光、PNS、偵測器致盲＋CSV v2 與未見過測試集,2026-10-29,2026-11-08,A3,todo,data/raw/dataset_v2.csv
+M2,P1 階段一,A+B,許程景、王端宏、何名綸,里程碑：diagnostic 五類 CSV 交接與 QBER 基準比較,2026-10-25,2026-10-25,A2;B3,todo,data/qkd_dataset.csv（diagnostic）；A/B 檢查欄位、計數、真值隔離與讀取結果；B 組混淆矩陣及只看 QBER 的比較表
+M3,P1 階段一,A+B,許程景、王端宏、何名綸,里程碑：老師審查物理假設；A/B 驗收資料品質、洩漏與讀取,2026-10-31,2026-10-31,M2,todo,老師物理假設審查紀錄；A/B CSV v1 品質、答案洩漏與讀取檢查結果；全部通過才啟動第二階段
+A3,P2 階段二,A,許程景,有條件：弱相干光、誘餌態與 PNS（11/8 目標）,2026-11-01,2026-11-08,M3,todo,老師審查後的弱相干光、誘餌態與 PNS 模型及測試；新增觀測欄位先與 B 組約定 CSV v2，不改已交接的 v1
+A4,P2 階段二,A,許程景,有條件：確認偵測器情境的抽象模型限制與 CSV v2 需求（11/8 目標）,2026-11-01,2026-11-08,M3,todo,偵測器情境的抽象模型限制與老師審查紀錄；如需新增觀測欄位，先與 B 組約定 CSV v2，維持 v1 不變
 B4,P2 階段二,B,王端宏、何名綸,物理規則表＋七類診斷（決策樹、梯度提升）,2026-11-02,2026-11-08,A3;B3,todo,ml/baseline.py；ml/train.py
 B5,P2 階段二,B,王端宏,同誤報率比較、留一攻擊驗證、SHAP,2026-11-05,2026-11-12,B4;A4,todo,reports/
 C3,P2 階段二,C,范語芸、何名綸,診斷觸發行動（中止金鑰、派工、校正）＋LLM 事件報告,2026-11-02,2026-11-14,C1;B4,todo,app/dashboard.py
