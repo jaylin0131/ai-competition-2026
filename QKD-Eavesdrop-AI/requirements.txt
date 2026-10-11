@@ -1,0 +1,9 @@
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+matplotlib>=3.8
+joblib>=1.3
+streamlit>=1.32
+pytest>=8.0
+# 選用：Qiskit 小規模驗證模擬器（決策 D8）
+# qiskit>=1.0

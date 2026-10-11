@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+.pytest_cache/
+# 企業原始資料僅供競賽使用，不進版控；從命題頁下載後執行 scripts/prepare_data.py 重新產生
+data/raw/*.csv
+data/processed/*.csv

@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QKD 專案甘特圖</title>
+<style>
+:root {
+  --bg:#f7f7f5; --card:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#e3e2dc; --phase:#efeee8;
+  --a:#2f6fd6; --b:#8a4fd1; --ab:#4f5fd1; --c:#13896f; --all:#7a7a72;
+  --today:#d13b3b; --exam:rgba(230,160,40,.12); --late:#c0392b; --deadline:#d13b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#161615; --card:#1f1f1d; --ink:#ecebe6; --muted:#a3a29b; --line:#34332f; --phase:#2a2a27;
+    --a:#6b9ef0; --b:#b58cf0; --ab:#8a96f0; --c:#3fc4a2; --all:#a8a8a0;
+    --today:#f06b6b; --exam:rgba(230,160,40,.14); --late:#f07a6b; --deadline:#f06b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#161615; --card:#1f1f1d; --ink:#ecebe6; --muted:#a3a29b; --line:#34332f; --phase:#2a2a27;
+  --a:#6b9ef0; --b:#b58cf0; --ab:#8a96f0; --c:#3fc4a2; --all:#a8a8a0;
+  --today:#f06b6b; --exam:rgba(230,160,40,.14); --late:#f07a6b; --deadline:#f06b6b;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+  font:14px/1.6 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; }
+main { max-width:1240px; margin:0 auto; padding:24px 16px 48px; }
+h1 { font-size:22px; margin:0 0 4px; }
+.sub { color:var(--muted); margin:0 0 20px; }
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:16px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+.card .k { color:var(--muted); font-size:12px; }
+.card .v { font-size:22px; font-weight:650; }
+.card ul { margin:6px 0 0; padding-left:18px; }
+.meter { height:6px; background:var(--line); border-radius:3px; margin-top:8px; overflow:hidden; }
+.meter i { display:block; height:100%; background:var(--c); }
+.legend { display:flex; flex-wrap:wrap; gap:14px; margin:8px 0 10px; color:var(--muted); font-size:12.5px; }
+.lg { display:inline-flex; align-items:center; gap:6px; }
+.sw { width:14px; height:10px; border-radius:3px; display:inline-block; background:var(--g); }
+.scroll { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 0; }
+svg.gantt { display:block; font-size:12.5px; }
+.g-a { --g:var(--a); } .g-b { --g:var(--b); } .g-ab { --g:var(--ab); } .g-c { --g:var(--c); } .g-all { --g:var(--all); }
+.grid { stroke:var(--line); }
+.tick, .month, .date { fill:var(--muted); font-size:11.5px; }
+.tick { text-anchor:middle; }
+.month { font-weight:600; }
+.phase-bg { fill:var(--phase); }
+.phase { fill:var(--ink); font-weight:650; }
+.tid { fill:var(--muted); font-size:11.5px; }
+.label { fill:var(--ink); }
+.label.late { fill:var(--late); font-weight:600; }
+.bar { fill:var(--g); fill-opacity:.16; stroke:var(--g); stroke-width:1.25; }
+.s-done .bar { fill-opacity:.85; }
+.bar-fill { fill:var(--g); fill-opacity:.85; }
+.s-optional .bar { stroke-dasharray:4 3; fill-opacity:.06; }
+.s-done .label { fill:var(--muted); }
+.ms { fill:var(--g); }
+.ms.deadline { fill:var(--deadline); }
+.exam { fill:var(--exam); }
+.exam-label { fill:var(--muted); font-size:11px; }
+.today { stroke:var(--today); stroke-width:1.5; stroke-dasharray:4 3; }
+.today-label { fill:var(--today); font-size:11.5px; font-weight:600; }
+table { width:100%; border-collapse:collapse; margin-top:20px; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; font-size:13px; }
+th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; font-size:12px; }
+tr.s-done td { color:var(--muted); }
+.pill { font-size:11.5px; padding:1px 8px; border-radius:999px; border:1px solid var(--line); white-space:nowrap; }
+.p-done { background:color-mix(in srgb,var(--c) 18%,transparent); }
+.p-doing { background:color-mix(in srgb,var(--a) 18%,transparent); }
+.p-optional { border-style:dashed; }
+.tablewrap { overflow-x:auto; }
+h2 { font-size:17px; margin:28px 0 2px; }
+.owner { fill:var(--muted); font-size:11.5px; text-anchor:end; }
+.people { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+.pname { font-weight:650; font-size:16px; display:flex; align-items:center; gap:8px; }
+.person .sw { background:var(--g); }
+.tasks { list-style:none; padding:0; margin:8px 0 0; font-size:13px; }
+.tasks li { padding:4px 0; border-top:1px solid var(--line); color:var(--muted); }
+.tasks li.soon { color:var(--ink); font-weight:600; }
+.when { display:block; font-size:11.5px; font-weight:400; color:var(--muted); }
+footer { color:var(--muted); font-size:12px; margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+<h1>QKD 鏈路 AI 健康診斷：執行甘特圖</h1>
+<p class="sub">2026 全國 AI 專題創意競賽・大會專題類資電領域組｜資料日期 2026/10/11</p>
+
+<section class="stats">
+  <div class="card"><div class="k">整體進度（不含里程碑與選做）</div><div class="v">3 / 31（10%）</div><div class="meter"><i style="width:10%"></i></div></div>
+  <div class="card"><div class="k">距報名繳件截止 12/1</div><div class="v">51 天</div></div>
+  <div class="card"><div class="k">下一個里程碑</div><div class="v" style="font-size:16px">CSV 規格 v2 定稿、分工確定（10/14）</div></div>
+  <div class="card"><div class="k">進行中</div><ul><li><b>T04</b> 名冊已定 6 人；確認組內分工（D13）與隊伍關係（D2）</li></ul></div>
+  <div class="card"><div class="k">落後任務</div><ul><li>沒有落後的任務</li></ul></div>
+</section>
+
+<div class="legend"><span class="lg"><i class="sw g-a"></i>A 組 通訊</span><span class="lg"><i class="sw g-b"></i>B 組 機器學習</span><span class="lg"><i class="sw g-ab"></i>A＋B 組</span><span class="lg"><i class="sw g-c"></i>C 組 PM</span><span class="lg"><i class="sw g-all"></i>全員</span><span class="lg">實心＝完成、半滿＝進行中、虛線＝選做、◆＝里程碑、紅色虛線＝今天、橘色區＝期中考週</span></div>
+<div class="scroll"><svg viewBox="0 0 1219 1266" width="1219" height="1266" role="img" aria-label="專案執行甘特圖" class="gantt">
+<rect x="656" y="54" width="132" height="1206" class="exam"/><text x="660" y="1260" class="exam-label">期中考週（各自確認）</text>
+<line x1="425" x2="425" y1="54" y2="1266" class="grid"/><text x="425" y="46" class="tick">10/12</text>
+<line x1="502" x2="502" y1="54" y2="1266" class="grid"/><text x="502" y="46" class="tick">10/19</text>
+<line x1="579" x2="579" y1="54" y2="1266" class="grid"/><text x="579" y="46" class="tick">10/26</text>
+<line x1="656" x2="656" y1="54" y2="1266" class="grid"/><text x="656" y="46" class="tick">11/2</text>
+<line x1="733" x2="733" y1="54" y2="1266" class="grid"/><text x="733" y="46" class="tick">11/9</text>
+<line x1="810" x2="810" y1="54" y2="1266" class="grid"/><text x="810" y="46" class="tick">11/16</text>
+<line x1="887" x2="887" y1="54" y2="1266" class="grid"/><text x="887" y="46" class="tick">11/23</text>
+<line x1="964" x2="964" y1="54" y2="1266" class="grid"/><text x="964" y="46" class="tick">11/30</text>
+<line x1="1041" x2="1041" y1="54" y2="1266" class="grid"/><text x="1041" y="46" class="tick">12/7</text>
+<line x1="1118" x2="1118" y1="54" y2="1266" class="grid"/><text x="1118" y="46" class="tick">12/14</text>
+<line x1="1195" x2="1195" y1="54" y2="1266" class="grid"/><text x="1195" y="46" class="tick">12/21</text>
+<text x="372" y="14" class="month">2026 年 10 月</text>
+<text x="647" y="14" class="month">2026 年 11 月</text>
+<text x="977" y="14" class="month">2026 年 12 月</text>
+<rect x="0" y="64" width="1219" height="22" class="phase-bg"/><text x="8" y="80.0" class="phase">P0 準備</text>
+<g class="row g-c s-done"><title>T01 整理比賽規則與題目評估｜C 組 PM｜10/08–10/08｜完成</title>
+<text x="8" y="107.0" class="tid">T01</text>
+<text x="44" y="107.0" class="label">整理比賽規則與題目評估</text>
+<rect x="382" y="95.0" width="9" height="16" rx="4" class="bar"/>
+<text x="397" y="107.0" class="date">✓</text>
+</g>
+<g class="row g-c s-done"><title>T02 撰寫專案計畫書｜C 組 PM｜10/08–10/08｜完成</title>
+<text x="8" y="133.0" class="tid">T02</text>
+<text x="44" y="133.0" class="label">撰寫專案計畫書</text>
+<rect x="382" y="121.0" width="9" height="16" rx="4" class="bar"/>
+<text x="397" y="133.0" class="date">✓</text>
+</g>
+<g class="row g-c s-done"><title>T03 建立專案資料夾與甘特圖｜C 組 PM｜10/11–10/11｜完成</title>
+<text x="8" y="159.0" class="tid">T03</text>
+<text x="44" y="159.0" class="label">建立專案資料夾與甘特圖</text>
+<rect x="415" y="147.0" width="9" height="16" rx="4" class="bar"/>
+<text x="430" y="159.0" class="date">✓</text>
+</g>
+<g class="row g-all s-doing"><title>T04 名冊已定 6 人；確認組內分工（D13）與隊伍關係（D2）｜全員｜10/11–10/12｜進行中</title>
+<text x="8" y="185.0" class="tid">T04</text>
+<text x="44" y="185.0" class="label">名冊已定 6 人；確認組內分工（D1…</text>
+<text x="360" y="185.0" class="owner">全員</text>
+<rect x="415" y="173.0" width="20" height="16" rx="4" class="bar"/>
+<rect x="415" y="173.0" width="10.0" height="16" rx="4" class="bar-fill"/>
+</g>
+<g class="row g-c s-todo"><title>T05 邀請指導老師（D3）｜范語芸｜10/11–10/14｜未開始</title>
+<text x="8" y="211.0" class="tid">T05</text>
+<text x="44" y="211.0" class="label">邀請指導老師（D3）</text>
+<text x="360" y="211.0" class="owner">范語芸</text>
+<rect x="415" y="199.0" width="42" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>T06 建立私人 GitHub 儲存庫、LINE 群組、雲端資料夾｜何名綸｜10/12–10/13｜未開始</title>
+<text x="8" y="237.0" class="tid">T06</text>
+<text x="44" y="237.0" class="label">建立私人 GitHub 儲存庫、LI…</text>
+<text x="360" y="237.0" class="owner">何名綸</text>
+<rect x="426" y="225.0" width="20" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-ab s-todo"><title>T07 定稿 CSV 規格 v2（七類、一回合一列；D5、D7、D9）｜許程景、王端宏｜10/12–10/14｜未開始</title>
+<text x="8" y="263.0" class="tid">T07</text>
+<text x="44" y="263.0" class="label">定稿 CSV 規格 v2（七類、一回…</text>
+<text x="360" y="263.0" class="owner">許程景</text>
+<rect x="426" y="251.0" width="31" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-a s-todo"><title>T08 取得並研讀老師的三支模擬程式｜許程景、林子桀、周冠辰｜10/12–10/14｜未開始</title>
+<text x="8" y="289.0" class="tid">T08</text>
+<text x="44" y="289.0" class="label">取得並研讀老師的三支模擬程式</text>
+<text x="360" y="289.0" class="owner">許程景</text>
+<rect x="426" y="277.0" width="31" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>T09 安裝開發環境（requirements.txt）｜全員｜10/13–10/14｜未開始</title>
+<text x="8" y="315.0" class="tid">T09</text>
+<text x="44" y="315.0" class="label">安裝開發環境（requirement…</text>
+<text x="360" y="315.0" class="owner">全員</text>
+<rect x="437" y="303.0" width="20" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>M1 里程碑：CSV 規格 v2 定稿、分工確定｜何名綸｜10/14–10/14｜未開始</title>
+<text x="8" y="341.0" class="tid">M1</text>
+<text x="44" y="341.0" class="label">里程碑：CSV 規格 v2 定稿、分…</text>
+<text x="360" y="341.0" class="owner">何名綸</text>
+<path d="M452.5 329.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="464.5" y="341.0" class="date">10/14</text>
+</g>
+<rect x="0" y="354" width="1219" height="22" class="phase-bg"/><text x="8" y="370.0" class="phase">P1 階段一</text>
+<g class="row g-a s-todo"><title>A1 基本 BB84＋單元測試（無雜訊 QBER≈0、全攔截≈25%）｜許程景、林子桀｜10/13–10/18｜未開始</title>
+<text x="8" y="397.0" class="tid">A1</text>
+<text x="44" y="397.0" class="label">基本 BB84＋單元測試（無雜訊 Q…</text>
+<text x="360" y="397.0" class="owner">許程景</text>
+<rect x="437" y="385.0" width="64" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-b s-todo"><title>B1 依規格產生假資料、跑通流程｜王端宏｜10/13–10/17｜未開始</title>
+<text x="8" y="423.0" class="tid">B1</text>
+<text x="44" y="423.0" class="label">依規格產生假資料、跑通流程</text>
+<text x="360" y="423.0" class="owner">王端宏</text>
+<rect x="437" y="411.0" width="53" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-a s-todo"><title>A2 截取重送、光纖老化、對準漂移＋一回合一列 CSV v1｜林子桀、周冠辰｜10/15–10/21｜未開始</title>
+<text x="8" y="449.0" class="tid">A2</text>
+<text x="44" y="449.0" class="label">截取重送、光纖老化、對準漂移＋一回合…</text>
+<text x="360" y="449.0" class="owner">林子桀</text>
+<rect x="459" y="437.0" width="75" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-b s-todo"><title>B2 固定門檻與指數平滑基準線｜何名綸｜10/15–10/20｜未開始</title>
+<text x="8" y="475.0" class="tid">B2</text>
+<text x="44" y="475.0" class="label">固定門檻與指數平滑基準線</text>
+<text x="360" y="475.0" class="owner">何名綸</text>
+<rect x="459" y="463.0" width="64" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-b s-todo"><title>B3 階段一比較：協定門檻 vs 基準線 vs 決策樹｜王端宏、何名綸｜10/19–10/25｜未開始</title>
+<text x="8" y="501.0" class="tid">B3</text>
+<text x="44" y="501.0" class="label">階段一比較：協定門檻 vs 基準線 …</text>
+<text x="360" y="501.0" class="owner">王端宏</text>
+<rect x="503" y="489.0" width="75" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>C1 Streamlit 儀表板雛形（先接假模型）｜范語芸｜10/19–10/31｜未開始</title>
+<text x="8" y="527.0" class="tid">C1</text>
+<text x="44" y="527.0" class="label">Streamlit 儀表板雛形（先接…</text>
+<text x="360" y="527.0" class="owner">范語芸</text>
+<rect x="503" y="515.0" width="141" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>C2 本地 LLM 實測（Gemma 4 E4B、TAIDE 12B 各十題）｜周冠辰、范語芸｜10/14–10/18｜未開始</title>
+<text x="8" y="553.0" class="tid">C2</text>
+<text x="44" y="553.0" class="label">本地 LLM 實測（Gemma 4 …</text>
+<text x="360" y="553.0" class="owner">周冠辰</text>
+<rect x="448" y="541.0" width="53" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>M2 里程碑：階段一完成（比較表）｜何名綸｜10/25–10/25｜未開始</title>
+<text x="8" y="579.0" class="tid">M2</text>
+<text x="44" y="579.0" class="label">里程碑：階段一完成（比較表）</text>
+<text x="360" y="579.0" class="owner">何名綸</text>
+<path d="M573.5 567.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="585.5" y="579.0" class="date">10/25</text>
+</g>
+<g class="row g-all s-todo"><title>M3 里程碑：10/31 檢查點（未達標就停在階段一）｜何名綸｜10/31–10/31｜未開始</title>
+<text x="8" y="605.0" class="tid">M3</text>
+<text x="44" y="605.0" class="label">里程碑：10/31 檢查點（未達標就…</text>
+<text x="360" y="605.0" class="owner">何名綸</text>
+<path d="M639.5 593.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="651.5" y="605.0" class="date">10/31</text>
+</g>
+<rect x="0" y="618" width="1219" height="22" class="phase-bg"/><text x="8" y="634.0" class="phase">P2 階段二</text>
+<g class="row g-a s-todo"><title>A3 誘騙態（μ、ν、真空）＋有限統計、故障並存｜許程景、林子桀｜10/26–11/04｜未開始</title>
+<text x="8" y="661.0" class="tid">A3</text>
+<text x="44" y="661.0" class="label">誘騙態（μ、ν、真空）＋有限統計、故…</text>
+<text x="360" y="661.0" class="owner">許程景</text>
+<rect x="580" y="649.0" width="108" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-a s-todo"><title>A4 雜散光、PNS、偵測器致盲＋CSV v2 與未見過測試集｜周冠辰、許程景｜10/29–11/08｜未開始</title>
+<text x="8" y="687.0" class="tid">A4</text>
+<text x="44" y="687.0" class="label">雜散光、PNS、偵測器致盲＋CSV …</text>
+<text x="360" y="687.0" class="owner">周冠辰</text>
+<rect x="613" y="675.0" width="119" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-b s-todo"><title>B4 物理規則表＋七類診斷（決策樹、梯度提升）｜王端宏、何名綸｜11/02–11/08｜未開始</title>
+<text x="8" y="713.0" class="tid">B4</text>
+<text x="44" y="713.0" class="label">物理規則表＋七類診斷（決策樹、梯度提…</text>
+<text x="360" y="713.0" class="owner">王端宏</text>
+<rect x="657" y="701.0" width="75" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-b s-todo"><title>B5 同誤報率比較、留一攻擊驗證、SHAP｜王端宏｜11/05–11/12｜未開始</title>
+<text x="8" y="739.0" class="tid">B5</text>
+<text x="44" y="739.0" class="label">同誤報率比較、留一攻擊驗證、SHAP</text>
+<text x="360" y="739.0" class="owner">王端宏</text>
+<rect x="690" y="727.0" width="86" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>C3 診斷觸發行動（中止金鑰、派工、校正）＋LLM 事件報告｜范語芸、何名綸｜11/02–11/14｜未開始</title>
+<text x="8" y="765.0" class="tid">C3</text>
+<text x="44" y="765.0" class="label">診斷觸發行動（中止金鑰、派工、校正）…</text>
+<text x="360" y="765.0" class="owner">范語芸</text>
+<rect x="657" y="753.0" width="141" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>C4 說明書大綱與 Q&amp;A 依新定位改寫｜范語芸、何名綸｜10/26–11/07｜未開始</title>
+<text x="8" y="791.0" class="tid">C4</text>
+<text x="44" y="791.0" class="label">說明書大綱與 Q&amp;A 依新定位改寫</text>
+<text x="360" y="791.0" class="owner">范語芸</text>
+<rect x="580" y="779.0" width="141" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>M4 里程碑：11/15 閉環 demo、錄第一支影片｜何名綸｜11/15–11/15｜未開始</title>
+<text x="8" y="817.0" class="tid">M4</text>
+<text x="44" y="817.0" class="label">里程碑：11/15 閉環 demo、…</text>
+<text x="360" y="817.0" class="owner">何名綸</text>
+<path d="M804.5 805.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="816.5" y="817.0" class="date">11/15</text>
+</g>
+<rect x="0" y="830" width="1219" height="22" class="phase-bg"/><text x="8" y="846.0" class="phase">P3 文件影片</text>
+<g class="row g-all s-todo"><title>D1 修 bug、雲端版部署、各組寫自己的說明書章節｜全員｜11/16–11/21｜未開始</title>
+<text x="8" y="873.0" class="tid">D1</text>
+<text x="44" y="873.0" class="label">修 bug、雲端版部署、各組寫自己的…</text>
+<text x="360" y="873.0" class="owner">全員</text>
+<rect x="811" y="861.0" width="64" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>D2 說明書初稿交指導老師審閱｜何名綸、范語芸｜11/19–11/22｜未開始</title>
+<text x="8" y="899.0" class="tid">D2</text>
+<text x="44" y="899.0" class="label">說明書初稿交指導老師審閱</text>
+<text x="360" y="899.0" class="owner">何名綸</text>
+<rect x="844" y="887.0" width="42" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>M5 里程碑：功能凍結｜何名綸｜11/22–11/22｜未開始</title>
+<text x="8" y="925.0" class="tid">M5</text>
+<text x="44" y="925.0" class="label">里程碑：功能凍結</text>
+<text x="360" y="925.0" class="owner">何名綸</text>
+<path d="M881.5 913.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="893.5" y="925.0" class="date">11/22</text>
+</g>
+<g class="row g-c s-todo"><title>D3 影片腳本與錄製（≤3 分鐘、匿名）｜范語芸、周冠辰、林子桀｜11/17–11/23｜未開始</title>
+<text x="8" y="951.0" class="tid">D3</text>
+<text x="44" y="951.0" class="label">影片腳本與錄製（≤3 分鐘、匿名）</text>
+<text x="360" y="951.0" class="owner">范語芸</text>
+<rect x="822" y="939.0" width="75" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>D4 切結書、學生證、表單資料｜全員｜11/16–11/26｜未開始</title>
+<text x="8" y="977.0" class="tid">D4</text>
+<text x="44" y="977.0" class="label">切結書、學生證、表單資料</text>
+<text x="360" y="977.0" class="owner">全員</text>
+<rect x="811" y="965.0" width="119" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>D5 說明書定稿（依老師意見修改）｜何名綸、許程景｜11/23–11/26｜未開始</title>
+<text x="8" y="1003.0" class="tid">D5</text>
+<text x="44" y="1003.0" class="label">說明書定稿（依老師意見修改）</text>
+<text x="360" y="1003.0" class="owner">何名綸</text>
+<rect x="888" y="991.0" width="42" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>D6 影片剪輯並上傳 YouTube 不公開｜周冠辰、范語芸｜11/23–11/26｜未開始</title>
+<text x="8" y="1029.0" class="tid">D6</text>
+<text x="44" y="1029.0" class="label">影片剪輯並上傳 YouTube 不公…</text>
+<text x="360" y="1029.0" class="owner">周冠辰</text>
+<rect x="888" y="1017.0" width="42" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-c s-todo"><title>M6 里程碑：送出報名（目標日）｜范語芸｜11/28–11/28｜未開始</title>
+<text x="8" y="1055.0" class="tid">M6</text>
+<text x="44" y="1055.0" class="label">里程碑：送出報名（目標日）</text>
+<text x="360" y="1055.0" class="owner">范語芸</text>
+<path d="M947.5 1043.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="959.5" y="1055.0" class="date">11/28</text>
+</g>
+<g class="row g-c s-todo"><title>M7 里程碑：報名繳件截止｜范語芸｜12/01–12/01｜未開始</title>
+<text x="8" y="1081.0" class="tid">M7</text>
+<text x="44" y="1081.0" class="label">里程碑：報名繳件截止</text>
+<text x="360" y="1081.0" class="owner">范語芸</text>
+<path d="M980.5 1069.0l8 8l-8 8l-8 -8z" class="ms deadline"/>
+<text x="992.5" y="1081.0" class="date">12/1</text>
+</g>
+<rect x="0" y="1094" width="1219" height="22" class="phase-bg"/><text x="8" y="1110.0" class="phase">P4 比賽</text>
+<g class="row g-all s-todo"><title>E1 初賽線上展示準備（即時版＋錄影版）｜范語芸、王端宏｜12/02–12/10｜未開始</title>
+<text x="8" y="1137.0" class="tid">E1</text>
+<text x="44" y="1137.0" class="label">初賽線上展示準備（即時版＋錄影版）</text>
+<text x="360" y="1137.0" class="owner">范語芸</text>
+<rect x="987" y="1125.0" width="97" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>M8 里程碑：初賽｜全員｜12/11–12/11｜未開始</title>
+<text x="8" y="1163.0" class="tid">M8</text>
+<text x="44" y="1163.0" class="label">里程碑：初賽</text>
+<text x="360" y="1163.0" class="owner">全員</text>
+<path d="M1090.5 1151.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="1102.5" y="1163.0" class="date">12/11</text>
+</g>
+<g class="row g-all s-todo"><title>E2 決賽簡報、海報（匿名版）與 Q&amp;A｜全員｜12/12–12/16｜未開始</title>
+<text x="8" y="1189.0" class="tid">E2</text>
+<text x="44" y="1189.0" class="label">決賽簡報、海報（匿名版）與 Q&amp;A</text>
+<text x="360" y="1189.0" class="owner">全員</text>
+<rect x="1097" y="1177.0" width="53" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>E3 全員彩排兩次、打包清單｜全員｜12/17–12/18｜未開始</title>
+<text x="8" y="1215.0" class="tid">E3</text>
+<text x="44" y="1215.0" class="label">全員彩排兩次、打包清單</text>
+<text x="360" y="1215.0" class="owner">全員</text>
+<rect x="1152" y="1203.0" width="20" height="16" rx="4" class="bar"/>
+</g>
+<g class="row g-all s-todo"><title>M9 里程碑：決賽與頒獎｜全員｜12/19–12/19｜未開始</title>
+<text x="8" y="1241.0" class="tid">M9</text>
+<text x="44" y="1241.0" class="label">里程碑：決賽與頒獎</text>
+<text x="360" y="1241.0" class="owner">全員</text>
+<path d="M1178.5 1229.0l8 8l-8 8l-8 -8z" class="ms"/>
+<text x="1190.5" y="1241.0" class="date">12/19</text>
+</g>
+<line x1="419.5" x2="419.5" y1="54" y2="1266" class="today"/><text x="423.5" y="32" class="today-label">今天 10/11</text>
+</svg></div>
+
+<h2>人員分工</h2>
+<p class="sub">粗體＝兩週內開始的任務。主責負責交付，協助者分擔實作。</p>
+<section class="people"><div class="card person g-a"><div class="pname"><i class="sw"></i>林子桀</div><div class="k">智慧自動化工程｜通訊組</div><div class="k">未完成 5 項（主責 1）＋全員任務 8 項</div><ul class="tasks"><li class="soon"><b>T08</b> 取得並研讀老師的三支模擬程式<span class="when">10/12–10/14・協助</span></li><li class="soon"><b>A1</b> 基本 BB84＋單元測試（無雜訊 QBER≈0、全攔截≈25%）<span class="when">10/13–10/18・協助</span></li><li class="soon"><b>A2</b> 截取重送、光纖老化、對準漂移＋一回合一列 CSV v1<span class="when">10/15–10/21・主責</span></li><li class=""><b>A3</b> 誘騙態（μ、ν、真空）＋有限統計、故障並存<span class="when">10/26–11/4・協助</span></li><li class=""><b>D3</b> 影片腳本與錄製（≤3 分鐘、匿名）<span class="when">11/17–11/23・協助</span></li></ul></div><div class="card person g-a"><div class="pname"><i class="sw"></i>許程景</div><div class="k">電機工程｜通訊組</div><div class="k">未完成 6 項（主責 4）＋全員任務 8 項</div><ul class="tasks"><li class="soon"><b>T07</b> 定稿 CSV 規格 v2（七類、一回合一列；D5、D7、D9）<span class="when">10/12–10/14・主責</span></li><li class="soon"><b>T08</b> 取得並研讀老師的三支模擬程式<span class="when">10/12–10/14・主責</span></li><li class="soon"><b>A1</b> 基本 BB84＋單元測試（無雜訊 QBER≈0、全攔截≈25%）<span class="when">10/13–10/18・主責</span></li><li class=""><b>A3</b> 誘騙態（μ、ν、真空）＋有限統計、故障並存<span class="when">10/26–11/4・主責</span></li><li class=""><b>A4</b> 雜散光、PNS、偵測器致盲＋CSV v2 與未見過測試集<span class="when">10/29–11/8・協助</span></li><li class=""><b>D5</b> 說明書定稿（依老師意見修改）<span class="when">11/23–11/26・協助</span></li></ul></div><div class="card person g-a"><div class="pname"><i class="sw"></i>周冠辰</div><div class="k">智慧自動化工程｜通訊組</div><div class="k">未完成 6 項（主責 3）＋全員任務 8 項</div><ul class="tasks"><li class="soon"><b>T08</b> 取得並研讀老師的三支模擬程式<span class="when">10/12–10/14・協助</span></li><li class="soon"><b>C2</b> 本地 LLM 實測（Gemma 4 E4B、TAIDE 12B 各十題）<span class="when">10/14–10/18・主責</span></li><li class="soon"><b>A2</b> 截取重送、光纖老化、對準漂移＋一回合一列 CSV v1<span class="when">10/15–10/21・協助</span></li><li class=""><b>A4</b> 雜散光、PNS、偵測器致盲＋CSV v2 與未見過測試集<span class="when">10/29–11/8・主責</span></li><li class=""><b>D3</b> 影片腳本與錄製（≤3 分鐘、匿名）<span class="when">11/17–11/23・協助</span></li><li class=""><b>D6</b> 影片剪輯並上傳 YouTube 不公開<span class="when">11/23–11/26・主責</span></li></ul></div><div class="card person g-b"><div class="pname"><i class="sw"></i>王端宏</div><div class="k">電機工程｜機器學習組</div><div class="k">未完成 6 項（主責 4）＋全員任務 8 項</div><ul class="tasks"><li class="soon"><b>T07</b> 定稿 CSV 規格 v2（七類、一回合一列；D5、D7、D9）<span class="when">10/12–10/14・協助</span></li><li class="soon"><b>B1</b> 依規格產生假資料、跑通流程<span class="when">10/13–10/17・主責</span></li><li class="soon"><b>B3</b> 階段一比較：協定門檻 vs 基準線 vs 決策樹<span class="when">10/19–10/25・主責</span></li><li class=""><b>B4</b> 物理規則表＋七類診斷（決策樹、梯度提升）<span class="when">11/2–11/8・主責</span></li><li class=""><b>B5</b> 同誤報率比較、留一攻擊驗證、SHAP<span class="when">11/5–11/12・主責</span></li><li class=""><b>E1</b> 初賽線上展示準備（即時版＋錄影版）<span class="when">12/2–12/10・協助</span></li></ul></div><div class="card person g-b"><div class="pname"><i class="sw"></i>何名綸</div><div class="k">資訊工程｜機器學習組・兼任 PM（進度與技術整合）</div><div class="k">未完成 8 項（主責 4）＋全員任務 8 項</div><ul class="tasks"><li class="soon"><b>T06</b> 建立私人 GitHub 儲存庫、LINE 群組、雲端資料夾<span class="when">10/12–10/13・主責</span></li><li class="soon"><b>B2</b> 固定門檻與指數平滑基準線<span class="when">10/15–10/20・主責</span></li><li class="soon"><b>B3</b> 階段一比較：協定門檻 vs 基準線 vs 決策樹<span class="when">10/19–10/25・協助</span></li><li class=""><b>C4</b> 說明書大綱與 Q&amp;A 依新定位改寫<span class="when">10/26–11/7・協助</span></li><li class=""><b>B4</b> 物理規則表＋七類診斷（決策樹、梯度提升）<span class="when">11/2–11/8・協助</span></li><li class=""><b>C3</b> 診斷觸發行動（中止金鑰、派工、校正）＋LLM 事件報告<span class="when">11/2–11/14・協助</span></li><li class=""><b>D2</b> 說明書初稿交指導老師審閱<span class="when">11/19–11/22・主責</span></li><li class=""><b>D5</b> 說明書定稿（依老師意見修改）<span class="when">11/23–11/26・主責</span></li></ul></div><div class="card person g-c"><div class="pname"><i class="sw"></i>范語芸</div><div class="k">通訊工程｜PM（環境、展示、文件與對外）</div><div class="k">未完成 9 項（主責 6）＋全員任務 8 項</div><ul class="tasks"><li class="soon"><b>T05</b> 邀請指導老師（D3）<span class="when">10/11–10/14・主責</span></li><li class="soon"><b>C2</b> 本地 LLM 實測（Gemma 4 E4B、TAIDE 12B 各十題）<span class="when">10/14–10/18・協助</span></li><li class="soon"><b>C1</b> Streamlit 儀表板雛形（先接假模型）<span class="when">10/19–10/31・主責</span></li><li class=""><b>C4</b> 說明書大綱與 Q&amp;A 依新定位改寫<span class="when">10/26–11/7・主責</span></li><li class=""><b>C3</b> 診斷觸發行動（中止金鑰、派工、校正）＋LLM 事件報告<span class="when">11/2–11/14・主責</span></li><li class=""><b>D3</b> 影片腳本與錄製（≤3 分鐘、匿名）<span class="when">11/17–11/23・主責</span></li><li class=""><b>D2</b> 說明書初稿交指導老師審閱<span class="when">11/19–11/22・協助</span></li><li class=""><b>D6</b> 影片剪輯並上傳 YouTube 不公開<span class="when">11/23–11/26・協助</span></li><li class=""><b>E1</b> 初賽線上展示準備（即時版＋錄影版）<span class="when">12/2–12/10・主責</span></li></ul></div></section>
+
+<div class="tablewrap"><table>
+<thead><tr><th>ID</th><th>任務</th><th>組別</th><th>負責人</th><th>期間</th><th>前置</th><th>狀態</th><th>交付物</th></tr></thead>
+<tbody><tr class="s-done"><td>T01</td><td>整理比賽規則與題目評估</td><td>C 組 PM</td><td>—</td><td>10/8–10/8</td><td>—</td><td><span class="pill p-done">完成</span></td><td>docs/competition-rules.md</td></tr><tr class="s-done"><td>T02</td><td>撰寫專案計畫書</td><td>C 組 PM</td><td>—</td><td>10/8–10/8</td><td>T01</td><td><span class="pill p-done">完成</span></td><td>docs/project-plan.md</td></tr><tr class="s-done"><td>T03</td><td>建立專案資料夾與甘特圖</td><td>C 組 PM</td><td>—</td><td>10/11–10/11</td><td>T02</td><td><span class="pill p-done">完成</span></td><td>schedule/gantt.html</td></tr><tr class="s-doing"><td>T04</td><td>名冊已定 6 人；確認組內分工（D13）與隊伍關係（D2）</td><td>全員</td><td><b>全員</b></td><td>10/11–10/12</td><td>T02</td><td><span class="pill p-doing">進行中</span></td><td>docs/decisions-pending.md</td></tr><tr class="s-todo"><td>T05</td><td>邀請指導老師（D3）</td><td>C 組 PM</td><td><b>范語芸</b></td><td>10/11–10/14</td><td>T04</td><td><span class="pill p-todo">未開始</span></td><td>老師同意</td></tr><tr class="s-todo"><td>T06</td><td>建立私人 GitHub 儲存庫、LINE 群組、雲端資料夾</td><td>C 組 PM</td><td><b>何名綸</b></td><td>10/12–10/13</td><td>T04</td><td><span class="pill p-todo">未開始</span></td><td>repo 連結</td></tr><tr class="s-todo"><td>T07</td><td>定稿 CSV 規格 v2（七類、一回合一列；D5、D7、D9）</td><td>A＋B 組</td><td><b>許程景</b>、王端宏</td><td>10/12–10/14</td><td>T02</td><td><span class="pill p-todo">未開始</span></td><td>docs/csv-schema.md</td></tr><tr class="s-todo"><td>T08</td><td>取得並研讀老師的三支模擬程式</td><td>A 組 通訊</td><td><b>許程景</b>、林子桀、周冠辰</td><td>10/12–10/14</td><td>T04</td><td><span class="pill p-todo">未開始</span></td><td>sim/reference/</td></tr><tr class="s-todo"><td>T09</td><td>安裝開發環境（requirements.txt）</td><td>全員</td><td><b>全員</b></td><td>10/13–10/14</td><td>T06</td><td><span class="pill p-todo">未開始</span></td><td>每人可執行 python -m pytest</td></tr><tr class="s-todo"><td>M1</td><td>里程碑：CSV 規格 v2 定稿、分工確定</td><td>全員</td><td><b>何名綸</b></td><td>10/14–10/14</td><td>T07、T04</td><td><span class="pill p-todo">未開始</span></td><td>—</td></tr><tr class="s-todo"><td>A1</td><td>基本 BB84＋單元測試（無雜訊 QBER≈0、全攔截≈25%）</td><td>A 組 通訊</td><td><b>許程景</b>、林子桀</td><td>10/13–10/18</td><td>T08</td><td><span class="pill p-todo">未開始</span></td><td>sim/bb84.py；tests/test_bb84.py</td></tr><tr class="s-todo"><td>B1</td><td>依規格產生假資料、跑通流程</td><td>B 組 機器學習</td><td><b>王端宏</b></td><td>10/13–10/17</td><td>T07</td><td><span class="pill p-todo">未開始</span></td><td>ml/fake_data.py</td></tr><tr class="s-todo"><td>A2</td><td>截取重送、光纖老化、對準漂移＋一回合一列 CSV v1</td><td>A 組 通訊</td><td><b>林子桀</b>、周冠辰</td><td>10/15–10/21</td><td>A1</td><td><span class="pill p-todo">未開始</span></td><td>data/raw/dataset_v1.csv</td></tr><tr class="s-todo"><td>B2</td><td>固定門檻與指數平滑基準線</td><td>B 組 機器學習</td><td><b>何名綸</b></td><td>10/15–10/20</td><td>B1</td><td><span class="pill p-todo">未開始</span></td><td>ml/baseline.py</td></tr><tr class="s-todo"><td>B3</td><td>階段一比較：協定門檻 vs 基準線 vs 決策樹</td><td>B 組 機器學習</td><td><b>王端宏</b>、何名綸</td><td>10/19–10/25</td><td>A2、B2</td><td><span class="pill p-todo">未開始</span></td><td>reports/</td></tr><tr class="s-todo"><td>C1</td><td>Streamlit 儀表板雛形（先接假模型）</td><td>C 組 PM</td><td><b>范語芸</b></td><td>10/19–10/31</td><td>M1</td><td><span class="pill p-todo">未開始</span></td><td>app/dashboard.py</td></tr><tr class="s-todo"><td>C2</td><td>本地 LLM 實測（Gemma 4 E4B、TAIDE 12B 各十題）</td><td>C 組 PM</td><td><b>周冠辰</b>、范語芸</td><td>10/14–10/18</td><td>T09</td><td><span class="pill p-todo">未開始</span></td><td>notes/llm-test.md</td></tr><tr class="s-todo"><td>M2</td><td>里程碑：階段一完成（比較表）</td><td>全員</td><td><b>何名綸</b></td><td>10/25–10/25</td><td>B3</td><td><span class="pill p-todo">未開始</span></td><td>比較表</td></tr><tr class="s-todo"><td>M3</td><td>里程碑：10/31 檢查點（未達標就停在階段一）</td><td>全員</td><td><b>何名綸</b></td><td>10/31–10/31</td><td>M2、C1</td><td><span class="pill p-todo">未開始</span></td><td>—</td></tr><tr class="s-todo"><td>A3</td><td>誘騙態（μ、ν、真空）＋有限統計、故障並存</td><td>A 組 通訊</td><td><b>許程景</b>、林子桀</td><td>10/26–11/4</td><td>A2</td><td><span class="pill p-todo">未開始</span></td><td>sim/bb84.py</td></tr><tr class="s-todo"><td>A4</td><td>雜散光、PNS、偵測器致盲＋CSV v2 與未見過測試集</td><td>A 組 通訊</td><td><b>周冠辰</b>、許程景</td><td>10/29–11/8</td><td>A3</td><td><span class="pill p-todo">未開始</span></td><td>data/raw/dataset_v2.csv</td></tr><tr class="s-todo"><td>B4</td><td>物理規則表＋七類診斷（決策樹、梯度提升）</td><td>B 組 機器學習</td><td><b>王端宏</b>、何名綸</td><td>11/2–11/8</td><td>A3、B3</td><td><span class="pill p-todo">未開始</span></td><td>ml/baseline.py；ml/train.py</td></tr><tr class="s-todo"><td>B5</td><td>同誤報率比較、留一攻擊驗證、SHAP</td><td>B 組 機器學習</td><td><b>王端宏</b></td><td>11/5–11/12</td><td>B4、A4</td><td><span class="pill p-todo">未開始</span></td><td>reports/</td></tr><tr class="s-todo"><td>C3</td><td>診斷觸發行動（中止金鑰、派工、校正）＋LLM 事件報告</td><td>C 組 PM</td><td><b>范語芸</b>、何名綸</td><td>11/2–11/14</td><td>C1、B4</td><td><span class="pill p-todo">未開始</span></td><td>app/dashboard.py</td></tr><tr class="s-todo"><td>C4</td><td>說明書大綱與 Q&amp;A 依新定位改寫</td><td>C 組 PM</td><td><b>范語芸</b>、何名綸</td><td>10/26–11/7</td><td>M2</td><td><span class="pill p-todo">未開始</span></td><td>docs/proposal-outline.md</td></tr><tr class="s-todo"><td>M4</td><td>里程碑：11/15 閉環 demo、錄第一支影片</td><td>全員</td><td><b>何名綸</b></td><td>11/15–11/15</td><td>B5、C3</td><td><span class="pill p-todo">未開始</span></td><td>demo 錄影 v1</td></tr><tr class="s-todo"><td>D1</td><td>修 bug、雲端版部署、各組寫自己的說明書章節</td><td>全員</td><td><b>全員</b></td><td>11/16–11/21</td><td>M4</td><td><span class="pill p-todo">未開始</span></td><td>說明書各章</td></tr><tr class="s-todo"><td>D2</td><td>說明書初稿交指導老師審閱</td><td>C 組 PM</td><td><b>何名綸</b>、范語芸</td><td>11/19–11/22</td><td>D1</td><td><span class="pill p-todo">未開始</span></td><td>老師意見</td></tr><tr class="s-todo"><td>M5</td><td>里程碑：功能凍結</td><td>全員</td><td><b>何名綸</b></td><td>11/22–11/22</td><td>D1</td><td><span class="pill p-todo">未開始</span></td><td>—</td></tr><tr class="s-todo"><td>D3</td><td>影片腳本與錄製（≤3 分鐘、匿名）</td><td>C 組 PM</td><td><b>范語芸</b>、周冠辰、林子桀</td><td>11/17–11/23</td><td>M4</td><td><span class="pill p-todo">未開始</span></td><td>影片素材</td></tr><tr class="s-todo"><td>D4</td><td>切結書、學生證、表單資料</td><td>全員</td><td><b>全員</b></td><td>11/16–11/26</td><td>T04</td><td><span class="pill p-todo">未開始</span></td><td>報名附件</td></tr><tr class="s-todo"><td>D5</td><td>說明書定稿（依老師意見修改）</td><td>C 組 PM</td><td><b>何名綸</b>、許程景</td><td>11/23–11/26</td><td>D2</td><td><span class="pill p-todo">未開始</span></td><td>說明書定稿</td></tr><tr class="s-todo"><td>D6</td><td>影片剪輯並上傳 YouTube 不公開</td><td>C 組 PM</td><td><b>周冠辰</b>、范語芸</td><td>11/23–11/26</td><td>D3</td><td><span class="pill p-todo">未開始</span></td><td>影片連結</td></tr><tr class="s-todo"><td>M6</td><td>里程碑：送出報名（目標日）</td><td>C 組 PM</td><td><b>范語芸</b></td><td>11/28–11/28</td><td>D4、D5、D6</td><td><span class="pill p-todo">未開始</span></td><td>表單確認頁截圖</td></tr><tr class="s-todo"><td>M7</td><td>里程碑：報名繳件截止</td><td>C 組 PM</td><td><b>范語芸</b></td><td>12/1–12/1</td><td>M6</td><td><span class="pill p-todo">未開始</span></td><td>—</td></tr><tr class="s-todo"><td>E1</td><td>初賽線上展示準備（即時版＋錄影版）</td><td>全員</td><td><b>范語芸</b>、王端宏</td><td>12/2–12/10</td><td>M6</td><td><span class="pill p-todo">未開始</span></td><td>demo 兩套</td></tr><tr class="s-todo"><td>M8</td><td>里程碑：初賽</td><td>全員</td><td><b>全員</b></td><td>12/11–12/11</td><td>E1</td><td><span class="pill p-todo">未開始</span></td><td>—</td></tr><tr class="s-todo"><td>E2</td><td>決賽簡報、海報（匿名版）與 Q&amp;A</td><td>全員</td><td><b>全員</b></td><td>12/12–12/16</td><td>M8</td><td><span class="pill p-todo">未開始</span></td><td>簡報與海報</td></tr><tr class="s-todo"><td>E3</td><td>全員彩排兩次、打包清單</td><td>全員</td><td><b>全員</b></td><td>12/17–12/18</td><td>E2</td><td><span class="pill p-todo">未開始</span></td><td>—</td></tr><tr class="s-todo"><td>M9</td><td>里程碑：決賽與頒獎</td><td>全員</td><td><b>全員</b></td><td>12/19–12/19</td><td>E3</td><td><span class="pill p-todo">未開始</span></td><td>—</td></tr></tbody>
+</table></div>
+<footer>由 scripts/build_gantt.py 從 schedule/tasks.csv 產生，請勿手動修改本檔。</footer>
+</main>
+</body>
+</html>

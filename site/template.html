@@ -1,0 +1,560 @@
+<title>AI 競賽團隊時程</title>
+<!--__HEAD__-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 版面：頂部倒數與篩選 → 兩組進度摘要 → 本週待辦 → 可橫向捲動的甘特圖（左欄固定任務名稱） */
+:root {
+  --bg: #F3F4F6;
+  --surface: #FFFFFF;
+  --sunken: #ECEEF2;
+  --fg: #172031;
+  --muted: #586174;
+  --line: #DCE0E7;
+  --jnc: #B4561A;
+  --qkd: #2858A3;
+  --late: #B42318;
+  --ok: #2E7D4F;
+  --exam: #F6EBD3;
+  --today: #B42318;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --label-w: 300px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F131A; --surface: #171D27; --sunken: #121720; --fg: #E5E8EE; --muted: #9AA3B3; --line: #283040;
+    --jnc: #E89356; --qkd: #79A6EA; --late: #F2826F; --ok: #61C48E; --exam: #2A2416; --today: #F2826F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F131A; --surface: #171D27; --sunken: #121720; --fg: #E5E8EE; --muted: #9AA3B3; --line: #283040;
+  --jnc: #E89356; --qkd: #79A6EA; --late: #F2826F; --ok: #61C48E; --exam: #2A2416; --today: #F2826F;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+button, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--qkd); outline-offset: 2px; }
+
+/* 頂部 */
+.top { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: end; justify-content: space-between; }
+.title h1 { font-size: 30px; font-weight: 900; letter-spacing: .01em; }
+.title p { margin: 4px 0 0; color: var(--muted); }
+.count { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cd { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 0; }
+.cd b { display: block; font-family: var(--font-mono); font-size: 24px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cd span { font-size: 13px; color: var(--muted); }
+.cd.next { border-color: var(--fg); }
+
+/* 篩選 */
+.filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { background: transparent; border: 0; padding: 6px 14px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.field { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.field select { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--fg); }
+.field input { width: 16px; height: 16px; accent-color: var(--fg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-left: auto; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 22px; height: 10px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+.lg-done { background: var(--muted); opacity: .55; }
+.lg-doing { background: var(--fg); }
+.lg-todo { background: var(--sunken); border: 1px solid var(--muted); }
+.lg-opt { border: 1px dashed var(--muted); }
+.lg-late { background: var(--sunken); border: 2px solid var(--late); }
+
+/* 摘要 */
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card h2 { font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--acc); flex: none; }
+.meter { height: 8px; background: var(--sunken); border-radius: 4px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--acc); }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 14px; color: var(--muted); }
+.stats b { color: var(--fg); font-family: var(--font-mono); font-weight: 600; font-size: 18px; margin-right: 4px; }
+.stats .warn b { color: var(--late); }
+.nextms { font-size: 14px; color: var(--muted); }
+.nextms strong { color: var(--fg); font-weight: 500; }
+
+/* 本週 */
+.week h2, .chart-head h2 { font-size: 19px; }
+.week { display: flex; flex-direction: column; gap: 12px; }
+.week-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.week-list li { display: grid; grid-template-columns: 92px 64px 1fr auto; gap: 12px; align-items: baseline; padding: 10px 16px; border-top: 1px solid var(--line); }
+.week-list li:first-child { border-top: 0; }
+.week-list .proj { font-size: 13px; color: var(--acc); font-weight: 700; }
+.week-list .who { color: var(--muted); font-size: 13px; text-align: right; }
+.week-list .t { min-width: 0; }
+.week-list .due { font-size: 13px; color: var(--muted); }
+.week-list .due.late { color: var(--late); font-weight: 700; }
+.empty { padding: 18px 16px; color: var(--muted); }
+
+/* 甘特圖 */
+.chart { display: flex; flex-direction: column; gap: 12px; }
+.chart-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+.chart-head .sub { color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.gantt { position: relative; }
+.row { display: grid; grid-template-columns: var(--label-w) 1fr; min-height: 44px; border-top: 1px solid var(--line); cursor: pointer; }
+.row:hover .lab, .row:hover .track { background: var(--sunken); }
+.lab { position: sticky; left: 0; z-index: 3; background: var(--surface); padding: 6px 12px 6px 14px; border-right: 1px solid var(--line); min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.lab .name { font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.lab .name .id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-right: 6px; }
+.lab .own { font-size: 12px; color: var(--muted); }
+.row.dim { opacity: .38; }
+.track { position: relative; }
+.bar { position: absolute; top: 13px; height: 18px; border-radius: 5px; }
+.bar.done { background: var(--acc); opacity: .4; }
+.bar.doing { background: var(--acc); }
+.bar.todo { background: color-mix(in srgb, var(--acc) 22%, var(--surface)); border: 1px solid var(--acc); }
+.bar.optional { border: 1.5px dashed var(--acc); background: transparent; }
+.bar.late { box-shadow: 0 0 0 2px var(--late); }
+.ms { position: absolute; top: 14px; width: 16px; height: 16px; transform: rotate(45deg); background: var(--acc); border: 2px solid var(--surface); }
+.ms.done { opacity: .45; }
+.ms.late { box-shadow: 0 0 0 2px var(--late); }
+.tag { position: absolute; top: 12px; font-size: 12px; white-space: nowrap; color: var(--muted); }
+.tag.late { color: var(--late); font-weight: 700; }
+.phase { display: grid; grid-template-columns: var(--label-w) 1fr; border-top: 1px solid var(--line); background: var(--sunken); }
+.phase .lab { background: var(--sunken); font-size: 13px; font-weight: 700; letter-spacing: .04em; color: var(--muted); min-height: 30px; padding-block: 4px; }
+.axis { display: grid; grid-template-columns: var(--label-w) 1fr; }
+.axis .lab { justify-content: end; padding-bottom: 6px; }
+.axis .lab { font-size: 13px; color: var(--muted); }
+.axis .track { height: 52px; }
+.tick { position: absolute; bottom: 6px; font-size: 12px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; font-family: var(--font-mono); }
+.month { position: absolute; top: 6px; font-size: 13px; font-weight: 700; }
+.overlay { position: absolute; top: 0; bottom: 0; pointer-events: none; z-index: 1; }
+.overlay.exam { background: var(--exam); }
+.overlay.grid { border-left: 1px solid var(--line); }
+.overlay.today { border-left: 2px solid var(--today); z-index: 2; }
+.today-flag { position: absolute; top: 4px; font-size: 12px; font-weight: 700; color: var(--today); transform: translateX(4px); white-space: nowrap; }
+.exam-flag { position: absolute; bottom: 24px; font-size: 12px; color: var(--muted); white-space: nowrap; transform: translateX(4px); }
+.row > .lab, .row > .track { position: relative; z-index: auto; }
+.row > .lab { position: sticky; z-index: 3; }
+.track { z-index: 2; }
+
+/* 明細 */
+.detail { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 24px; padding: 12px 16px 14px var(--pad, 14px); background: var(--sunken); border-top: 1px dashed var(--line); font-size: 14px; position: sticky; left: 0; max-width: min(100vw - 40px, 900px); cursor: default; }
+.detail dt { font-size: 12px; color: var(--muted); }
+.detail dd { margin: 0; overflow-wrap: anywhere; }
+.pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.s-done { color: var(--ok); } .s-doing { color: var(--fg); } .s-todo { color: var(--muted); } .s-optional { color: var(--muted); } .s-late { color: var(--late); }
+
+.chk { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--ok); cursor: pointer; }
+.chk:disabled { cursor: default; opacity: .5; }
+.lab .head { display: flex; gap: 8px; align-items: flex-start; }
+.lab .head .chk { margin-top: 1px; }
+.lab .meta { padding-left: 26px; }
+.row.is-done .name { color: var(--muted); }
+.row.is-done .name .txt { text-decoration: line-through; text-decoration-color: var(--line); }
+.sync { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.sync.live::before { background: var(--ok); }
+.sync.ro::before { background: var(--jnc); }
+.sync.err { color: var(--late); }
+.sync.err::before { background: var(--late); }
+.week-list li { grid-template-columns: 24px 92px 64px 1fr auto; }
+.auth { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; font-size: 14px; }
+.auth .login { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.auth input { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--fg); min-width: 0; width: 240px; max-width: 100%; }
+.auth button { background: var(--fg); color: var(--bg); border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+.auth #logout { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.auth .hint { color: var(--muted); font-size: 13px; }
+.auth .who-am-i { font-weight: 700; }
+footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+
+@media (max-width: 640px) {
+  :root { --label-w: 170px; }
+  .wrap { padding: 20px 16px 48px; gap: 22px; }
+  .title h1 { font-size: 24px; }
+  .count { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .legend { margin-left: 0; }
+  .week-list li { grid-template-columns: 24px 1fr auto; }
+  .week-list .t { grid-column: 2 / -1; }
+  .lab .meta { display: none; }
+  .lab .own { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) { .scroller { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1>AI 競賽團隊時程</h1>
+      <p>2026 全國 AI 專題創意競賽・企業組與資電組兩件作品</p>
+    </div>
+    <div class="count" id="count" aria-label="關鍵日期倒數"></div>
+  </header>
+
+  <section class="filters" aria-label="篩選">
+    <div class="seg" role="group" aria-label="作品">
+      <button type="button" id="p-all" data-p="all">兩組</button>
+      <button type="button" id="p-jnc" data-p="jnc">企業組</button>
+      <button type="button" id="p-qkd" data-p="qkd">資電組</button>
+    </div>
+    <label class="field" for="person">成員
+      <select id="person"></select>
+    </label>
+    <label class="field" for="hide-done"><input type="checkbox" id="hide-done"> 隱藏已完成</label>
+    <span class="sync" id="sync" role="status">連線中…</span>
+    <div class="auth" id="auth" hidden></div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="lg-done"></i>已完成</span>
+      <span><i class="lg-doing"></i>進行中</span>
+      <span><i class="lg-todo"></i>未開始</span>
+      <span><i class="lg-opt"></i>選做</span>
+      <span><i class="lg-late"></i>逾期</span>
+    </div>
+  </section>
+
+  <section class="summary" id="summary" aria-label="進度摘要"></section>
+
+  <section class="week">
+    <h2 id="week-title">接下來 7 天</h2>
+    <ul class="week-list" id="week"></ul>
+  </section>
+
+  <div id="charts"></div>
+
+  <footer>
+    <span id="updated"></span>
+    <span>勾選「完成」會即時同步給所有成員；任務、日期與負責人來自兩個專案的 schedule/tasks.csv。點任一列可看交付物、相依任務與勾選紀錄。</span>
+  </footer>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const PX = 16;
+  const STATUS = { done: "已完成", doing: "進行中", todo: "未開始", optional: "選做" };
+  const ACC = { jnc: "var(--jnc)", qkd: "var(--qkd)" };
+
+  const dn = s => { const [y, m, d] = s.split("-").map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
+  const now = new Date();
+  const TODAY = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5;
+  const md = n => { const d = new Date(n * 864e5); return (d.getUTCMonth() + 1) + "/" + d.getUTCDate(); };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const all = [];
+  D.projects.forEach(p => p.tasks.forEach(t => {
+    t.p = p.key; t.s = dn(t.start); t.e = dn(t.end);
+    t.k = p.key + "_" + t.id;
+    t.ms = /^M\d+$/.test(t.id);
+    all.push(t);
+  }));
+  const byKey = Object.fromEntries(all.map(t => [t.k, t]));
+  const START = Math.min(...all.map(t => t.s)) - 1;
+  const END = Math.max(...all.map(t => t.e)) + 2;
+  const X = n => (n - START) * PX;
+
+  // 成員勾選的完成狀態，覆蓋 tasks.csv 的狀態。key = <作品>_<編號>
+  // 後端二選一：Claude Artifact 的共用資料庫，或 Supabase（Cloudflare Pages 版）
+  const OV = {};
+  let canWrite = false;
+  const B = { write: null, names: async () => ({}) };
+  const eff = t => { const o = OV[t.k]; if (!o) return t.status; if (o.done) return "done"; return t.status === "done" ? "doing" : t.status; };
+  const isDone = t => eff(t) === "done";
+  const isLate = t => { const s = eff(t); return (s === "todo" || s === "doing") && t.e < TODAY; };
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("gantt:" + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem("gantt:" + k, JSON.stringify(v)); } catch (e) {} }
+  };
+  const hash = (location.hash || "").slice(1);
+  const state = {
+    p: ["all", "jnc", "qkd"].includes(hash) ? hash : store.get("p", "all"),
+    person: store.get("person", ""),
+    hideDone: store.get("hideDone", false),
+    open: null
+  };
+
+  const sel = document.getElementById("person");
+  sel.innerHTML = '<option value="">全部成員</option>' + D.team.map(m =>
+    `<option value="${esc(m.name)}">${esc(m.name)}（${esc(m.dept)}）</option>`).join("");
+  if (!D.team.some(m => m.name === state.person)) state.person = "";
+  sel.value = state.person;
+  const hd = document.getElementById("hide-done");
+  hd.checked = state.hideDone;
+  const syncEl = document.getElementById("sync");
+  const setSync = (cls, text) => { syncEl.className = "sync " + cls; syncEl.textContent = text; };
+  const authEl = document.getElementById("auth");
+
+  const mine = t => !state.person || t.owners.includes(state.person) || t.owners.includes("全員");
+  const projName = k => D.projects.find(p => p.key === k).short;
+  const chk = (t, label) => `<input type="checkbox" class="chk" data-k="${t.k}" ${isDone(t) ? "checked" : ""} ${canWrite ? "" : "disabled"} aria-label="${esc(label)}">`;
+
+  function renderCount() {
+    const items = D.keyDates.map(k => ({ ...k, left: dn(k.date) - TODAY }));
+    const nextIdx = items.findIndex(k => k.left >= 0);
+    document.getElementById("count").innerHTML = items.map((k, i) =>
+      `<div class="cd${i === nextIdx ? " next" : ""}"><b>${k.left >= 0 ? k.left : "—"}</b><span>${k.left >= 0 ? "天到" : "已過・"}${esc(k.label)} ${md(dn(k.date))}</span></div>`).join("");
+  }
+
+  function renderSummary() {
+    const ps = D.projects.filter(p => state.p === "all" || p.key === state.p);
+    document.getElementById("summary").innerHTML = ps.map(p => {
+      const ts = all.filter(t => t.p === p.key && t.status !== "optional" && mine(t));
+      const done = ts.filter(isDone).length;
+      const doing = ts.filter(t => eff(t) === "doing").length;
+      const late = ts.filter(isLate).length;
+      const pct = ts.length ? Math.round(done / ts.length * 100) : 0;
+      const nm = all.filter(t => t.p === p.key && t.ms && !isDone(t) && t.e >= TODAY).sort((a, b) => a.e - b.e)[0];
+      return `<article class="card" style="--acc:${ACC[p.key]}">
+        <h2><span class="dot"></span>${esc(p.name)}</h2>
+        <div class="meter" role="img" aria-label="完成 ${pct}%"><i style="width:${pct}%"></i></div>
+        <div class="stats">
+          <span><b>${done}/${ts.length}</b>完成（${pct}%）</span>
+          <span><b>${doing}</b>進行中</span>
+          <span class="${late ? "warn" : ""}"><b>${late}</b>逾期</span>
+        </div>
+        ${nm ? `<div class="nextms">下一個里程碑 <strong class="mono">${md(nm.e)}</strong>（${nm.e - TODAY} 天後）<strong>${esc(nm.task.replace(/^里程碑：/, ""))}</strong></div>` : ""}
+        ${state.person ? `<div class="nextms">只計算 ${esc(state.person)} 參與與全員的任務</div>` : ""}
+      </article>`;
+    }).join("");
+  }
+
+  function renderWeek() {
+    const list = all.filter(t => (state.p === "all" || t.p === state.p) && mine(t) && !t.ms &&
+      (eff(t) === "todo" || eff(t) === "doing") && t.s <= TODAY + 7 && (t.e >= TODAY || isLate(t)))
+      .sort((a, b) => a.e - b.e);
+    document.getElementById("week-title").textContent = state.person ? `${state.person} 接下來 7 天` : "接下來 7 天";
+    const ul = document.getElementById("week");
+    ul.innerHTML = list.length ? list.map(t => {
+      const left = t.e - TODAY, late = isLate(t);
+      const due = late ? `逾期 ${-left} 天` : left === 0 ? "今天到期" : `${md(t.e)} 到期・剩 ${left} 天`;
+      return `<li style="--acc:${ACC[t.p]}">${chk(t, "標記完成：" + t.id + " " + t.task)}<span class="proj">${projName(t.p)}</span><span class="mono due ${late ? "late" : ""}">${t.id}</span>
+        <span class="t">${esc(t.task)}<br><span class="due ${late ? "late" : ""}">${due}・${STATUS[eff(t)]}</span></span>
+        <span class="who">${esc(t.owners.join("、") || "未指派")}</span></li>`;
+    }).join("") : `<li class="empty">這 7 天沒有要進行的任務。</li>`;
+  }
+
+  function axisHtml() {
+    let ticks = "", months = "";
+    for (let n = START; n <= END; n++) {
+      const d = new Date(n * 864e5);
+      if (d.getUTCDay() === 1) ticks += `<span class="tick" style="left:${X(n)}px">${md(n)}</span>`;
+      if (d.getUTCDate() === 1 || n === START) months += `<span class="month" style="left:${X(n) + 4}px">${d.getUTCMonth() + 1} 月</span>`;
+    }
+    return `<div class="axis"><div class="lab">完成・任務・負責人</div><div class="track" style="width:${(END - START) * PX}px">${months}${ticks}</div></div>`;
+  }
+
+  function overlays(labelW) {
+    let h = "";
+    for (let n = START; n <= END; n++) if (new Date(n * 864e5).getUTCDay() === 1) h += `<div class="overlay grid" style="left:${labelW + X(n)}px"></div>`;
+    const [ex0, ex1] = D.exam.map(dn);
+    h += `<div class="overlay exam" style="left:${labelW + X(ex0)}px;width:${(ex1 - ex0 + 1) * PX}px"><span class="exam-flag">期中考週（暫定）</span></div>`;
+    if (TODAY >= START && TODAY <= END) h += `<div class="overlay today" style="left:${labelW + X(TODAY) + PX / 2}px"><span class="today-flag">今天 ${md(TODAY)}</span></div>`;
+    return h;
+  }
+
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const p2 = n => String(n).padStart(2, "0");
+    return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  }
+
+  function rowHtml(t) {
+    const st = eff(t), late = isLate(t);
+    const cls = st + (late ? " late" : "");
+    const mark = t.ms
+      ? `<span class="ms ${cls}" style="left:${X(t.s) + PX / 2 - 8}px" aria-hidden="true"></span>`
+      : `<span class="bar ${cls}" style="left:${X(t.s) + 1}px;width:${(t.e - t.s + 1) * PX - 2}px" aria-hidden="true"></span>`;
+    const tagX = t.ms ? X(t.s) + PX + 6 : X(t.e + 1) + 6;
+    const tag = late ? `<span class="tag late" style="left:${tagX}px">逾期</span>` : t.ms ? `<span class="tag" style="left:${tagX}px">${md(t.e)}</span>` : "";
+    const open = state.open === t.k;
+    const o = OV[t.k];
+    const record = o && o.by
+      ? `<span data-by="${esc(o.by)}">成員</span> 於 ${fmtTime(o.at)} ${o.done ? "勾選完成" : "取消完成"}`
+      : t.status === "done" ? "tasks.csv 標為已完成" : "尚無勾選紀錄";
+    const detail = open ? `<dl class="detail">
+        <div><dt>狀態</dt><dd>${late ? `<span class="pill s-late">逾期</span> ` : ""}<span class="pill s-${st}">${STATUS[st]}</span></dd></div>
+        <div><dt>期間</dt><dd class="mono">${t.start} → ${t.end}（${t.e - t.s + 1} 天）</dd></div>
+        <div><dt>負責</dt><dd>${esc(t.owners.join("、") || "未指派")}　<span class="s-todo">${esc(t.group)} 組</span></dd></div>
+        <div><dt>交付物</dt><dd>${esc(t.deliverable || "—")}</dd></div>
+        <div><dt>需先完成</dt><dd class="mono">${esc(t.depends.join("、") || "—")}</dd></div>
+        <div><dt>勾選紀錄</dt><dd>${record}</dd></div>
+      </dl>` : "";
+    return `<div class="row ${mine(t) ? "" : "dim"} ${st === "done" ? "is-done" : ""}" data-k="${t.k}" role="button" tabindex="0" aria-expanded="${open}"
+        aria-label="${esc(t.id + " " + t.task + "，" + (late ? "逾期，" : "") + STATUS[st] + "，" + t.start + " 到 " + t.end)}">
+      <div class="lab"><div class="head">${chk(t, "標記完成：" + t.id + " " + t.task)}<span class="name"><span class="id">${t.id}</span><span class="txt">${esc(t.task)}</span></span></div><span class="own meta">${esc(t.owners.join("、") || "未指派")}</span></div>
+      <div class="track" style="width:${(END - START) * PX}px">${mark}${tag}</div>${detail}</div>`;
+  }
+
+  function renderCharts() {
+    const labelW = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--label-w")) || 300;
+    const ps = D.projects.filter(p => state.p === "all" || p.key === state.p);
+    const box = document.getElementById("charts");
+    const keep = [...box.querySelectorAll(".scroller")].map(s => s.scrollLeft);
+    box.innerHTML = ps.map(p => {
+      let body = "", phase = "";
+      const ts = all.filter(t => t.p === p.key);
+      ts.forEach(t => {
+        if (state.hideDone && isDone(t)) return;
+        if (t.phase !== phase) { phase = t.phase; body += `<div class="phase"><div class="lab">${esc(phase)}</div><div></div></div>`; }
+        body += rowHtml(t);
+      });
+      const d = ts.filter(isDone).length;
+      return `<section class="chart" style="--acc:${ACC[p.key]}" aria-label="${esc(p.name)} 甘特圖">
+        <div class="chart-head"><h2>${esc(p.name)}</h2><span class="sub">${ts.length} 項任務・${d} 項已完成${state.person ? "・淡色列為其他成員的任務" : ""}</span></div>
+        <div class="scroller"><div class="gantt" style="width:${labelW + (END - START) * PX}px">${axisHtml()}${body}${overlays(labelW)}</div></div>
+      </section>`;
+    }).join("");
+    box.querySelectorAll(".scroller").forEach((s, i) => {
+      s.style.scrollBehavior = "auto";
+      s.scrollLeft = keep[i] !== undefined ? keep[i] : Math.max(0, X(TODAY) - 7 * PX);
+      s.style.scrollBehavior = "";
+    });
+    fillNames();
+  }
+
+  async function fillNames() {
+    const els = [...document.querySelectorAll("[data-by]")];
+    if (!els.length) return;
+    try {
+      const names = await B.names([...new Set(els.map(e => e.dataset.by))]);
+      els.forEach(e => { e.textContent = names[e.dataset.by] || "某位成員"; });
+    } catch (e) {}
+  }
+
+  function render() {
+    document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.p === state.p)));
+    renderCount(); renderSummary(); renderWeek(); renderCharts();
+  }
+
+  async function toggleDone(k, done) {
+    const t = byKey[k];
+    if (!t || !B.write || !canWrite) return;
+    const prev = OV[k];
+    OV[k] = { done, by: B.me || "", at: new Date().toISOString() };
+    render();
+    try {
+      await B.write(t, done, OV[k].at);
+      setSync("live", "已同步，所有成員都看得到");
+    } catch (e) {
+      if (prev) OV[k] = prev; else delete OV[k];
+      render();
+      setSync("err", e && e.denied ? "你沒有寫入權限，請確認登入的 email 在成員名單上" : "沒有存到，請檢查網路後再勾一次");
+    }
+  }
+
+  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+    state.p = b.dataset.p; store.set("p", state.p); state.open = null;
+    document.getElementById("charts").innerHTML = "";
+    render();
+  }));
+  sel.addEventListener("change", () => { state.person = sel.value; store.set("person", state.person); render(); });
+  hd.addEventListener("change", () => { state.hideDone = hd.checked; store.set("hideDone", state.hideDone); render(); });
+  document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("chk")) toggleDone(e.target.dataset.k, e.target.checked); });
+  const charts = document.getElementById("charts");
+  const toggle = row => { const k = row.dataset.k; state.open = state.open === k ? null : k; renderCharts(); const r = charts.querySelector(`.row[data-k="${k}"]`); if (r) r.focus({ preventScroll: true }); };
+  charts.addEventListener("click", e => { if (e.target.closest(".detail") || e.target.classList.contains("chk")) return; const r = e.target.closest(".row"); if (r) toggle(r); });
+  charts.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); toggle(e.target); } });
+
+  document.getElementById("updated").textContent = `任務資料（tasks.csv）更新時間：${D.updated}`;
+  render();
+
+  const applyRows = rows => {
+    for (const k of Object.keys(OV)) delete OV[k];
+    rows.forEach(r => { if (byKey[r.k] && typeof r.done === "boolean") OV[r.k] = { done: r.done, by: String(r.by || ""), at: String(r.at || "") }; });
+    render();
+  };
+
+  // Claude Artifact：共用資料庫 status/<key>，身分由 claude.ai 帳號提供
+  async function startArtifact() {
+    const c = window.claude;
+    if (!c || !c.use) { setSync("", "離線檢視：只顯示 tasks.csv 的狀態"); return; }
+    const [db, u] = await Promise.all([c.use("db"), c.use("user")]);
+    if (!db) { setSync("", "未登入：只顯示 tasks.csv 的狀態，登入後才能勾選"); return; }
+    try { B.me = u ? await u.id() : ""; } catch (e) {}
+    let w = null;
+    try { w = u ? await u.can("data.write") : null; } catch (e) {}
+    canWrite = w !== false;
+    B.write = (t, done, at) => db.collection("status").doc(t.k).set({ done, by: B.me || "", at, project: t.p, task: t.id })
+      .catch(e => { throw { denied: e && e.code === "not_granted" }; });
+    B.names = async ids => {
+      if (!u) return {};
+      const ps = await u.profiles(ids);
+      return Object.fromEntries(ids.map(id => [id, ps[id] && (ps[id].isMe ? "你" : ps[id].name)]));
+    };
+    setSync(canWrite ? "live" : "ro", canWrite ? "已連線：勾選會即時同步給所有成員" : "唯讀：你沒有編輯權限");
+    db.collection("status").onSnapshot(snap => applyRows(snap.docs.map(d => ({ k: d.id, ...(d.data() || {}) }))),
+      () => setSync("err", "同步中斷，重新整理頁面再試"));
+    render();
+  }
+
+  // Supabase：email 登入連結；成員名單與權限由資料庫的 RLS 規則把關
+  async function startSupabase(cfg) {
+    if (!window.supabase || !cfg.url || !cfg.anonKey) { setSync("", "唯讀：網站尚未連上資料庫，只顯示 tasks.csv 的狀態"); return; }
+    const sb = window.supabase.createClient(cfg.url, cfg.anonKey);
+    let channel = null, members = {};
+
+    const showLogin = msg => {
+      authEl.hidden = false;
+      authEl.innerHTML = `<form id="login" class="login"><label for="login-email" class="field">登入後才能勾選</label>
+        <input id="login-email" type="email" required placeholder="你的成員 email" autocomplete="email">
+        <button type="submit">寄登入連結</button><span class="hint">${esc(msg || "")}</span></form>`;
+      document.getElementById("login").addEventListener("submit", async e => {
+        e.preventDefault();
+        const email = document.getElementById("login-email").value.trim();
+        const hint = authEl.querySelector(".hint");
+        hint.textContent = "寄送中…";
+        const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+        hint.textContent = error ? "寄送失敗：" + error.message : "已寄出，請到信箱點登入連結（同一個瀏覽器開啟）";
+      });
+    };
+
+    const showUser = email => {
+      authEl.hidden = false;
+      authEl.innerHTML = `<span class="who-am-i">${esc(members[email] || email)}</span><button type="button" id="logout">登出</button>`;
+      document.getElementById("logout").addEventListener("click", () => sb.auth.signOut());
+    };
+
+    B.names = async ids => Object.fromEntries(ids.map(id => [id, id === B.me ? "你" : (members[id] || id)]));
+    B.write = async (t, done) => {
+      const { error } = await sb.from("task_status").upsert({ key: t.k, project: t.p, task_id: t.id, done });
+      if (error) throw { denied: error.code === "42501" || /row-level security/i.test(error.message) };
+    };
+
+    async function enter(session) {
+      if (channel) { sb.removeChannel(channel); channel = null; }
+      if (!session) {
+        canWrite = false; B.me = ""; applyRows([]);
+        setSync("", "未登入：只顯示 tasks.csv 的狀態");
+        showLogin();
+        return;
+      }
+      B.me = (session.user.email || "").toLowerCase();
+      const m = await sb.from("members").select("email,name");
+      members = Object.fromEntries((m.data || []).map(r => [r.email.toLowerCase(), r.name]));
+      canWrite = !!members[B.me];
+      showUser(B.me);
+      if (!canWrite) { setSync("err", "這個 email 不在成員名單上，請隊長加入後再登入"); applyRows([]); return; }
+      const load = async () => {
+        const { data, error } = await sb.from("task_status").select("key,done,updated_by_email,updated_at");
+        if (error) { setSync("err", "讀取失敗：" + error.message); return; }
+        applyRows(data.map(r => ({ k: r.key, done: r.done, by: r.updated_by_email, at: r.updated_at })));
+      };
+      await load();
+      channel = sb.channel("task_status")
+        .on("postgres_changes", { event: "*", schema: "public", table: "task_status" }, load)
+        .subscribe(st => {
+          if (st === "SUBSCRIBED") setSync("live", "已連線：勾選會即時同步給所有成員");
+          else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") setSync("ro", "即時同步中斷：勾選仍會儲存，重新整理可看到別人的更新");
+        });
+    }
+
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(() => enter(session), 0);
+    });
+  }
+
+  const cfg = D.backend || { mode: "artifact" };
+  (cfg.mode === "supabase" ? startSupabase(cfg) : startArtifact()).catch(() => setSync("err", "連線失敗，重新整理頁面再試"));
+})();
+</script>

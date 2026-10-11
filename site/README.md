@@ -1,0 +1,18 @@
+# 團隊時程網站
+
+把 `JNC-AIoT` 與 `QKD-Eavesdrop-AI` 兩個專案的 `schedule/tasks.csv` 合併成一頁甘特圖，成員可在網頁上勾選完成。
+
+| 檔案 | 用途 |
+|---|---|
+| `template.html` | 版面與程式（要改外觀改這裡） |
+| `build_site.py` | 讀兩份 tasks.csv 與 `QKD-Eavesdrop-AI/schedule/team.csv`，產生網頁 |
+| `sync_status.py` | 把網站勾選寫回 tasks.csv（GitHub Actions 每天執行） |
+
+同一份網頁有兩種版本：
+
+| 版本 | 指令 | 勾選存在哪 |
+|---|---|---|
+| Cloudflare Pages（正式） | `python3 site/build_site.py --mode supabase --out site/dist/index.html` | Supabase，部署步驟見 [deploy/README.md](../deploy/README.md) |
+| Claude Artifact（舊版） | `python3 site/build_site.py` → 發布 `site/index.html` | claude.ai 的 Artifact 資料庫，網址 https://claude.ai/artifact/RjNqdJdi1Y2gCYspS18vbV |
+
+產生出來的 `index.html`、`dist/` 不進版控，不要手改。
