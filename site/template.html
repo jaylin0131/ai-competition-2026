@@ -34,6 +34,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
 .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; display: flex; flex-direction: column; gap: 28px; }
 h1, h2, h3 { margin: 0; text-wrap: balance; }
@@ -163,16 +164,15 @@ button, select { font: inherit; color: inherit; }
 .auth button { background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
 .auth button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 .id-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--fg) 45%, transparent); }
-.id-card { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 24px; width: min(560px, 100%); max-height: calc(100% - 32px); overflow: auto; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
+.id-card { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 24px; width: min(420px, 100%); max-height: calc(100% - 32px); overflow: auto; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
 .id-card h2 { font-size: 22px; }
 .id-card p { margin: 0; color: var(--muted); font-size: 14px; }
-.id-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-.id-grid button { text-align: left; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
-.id-grid button:hover { border-color: var(--fg); }
-.id-grid button[aria-pressed="true"] { border: 2px solid var(--fg); padding: 9px 11px; }
-.id-grid b { font-size: 16px; }
-.id-grid span { font-size: 12px; color: var(--muted); }
-.id-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
+.id-select, .auth select { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--fg); font-size: 16px; width: 100%; }
+.auth select { width: auto; font-size: 14px; padding: 4px 8px; }
+.id-foot .primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.id-foot .primary:disabled { opacity: .4; cursor: default; }
+.id-foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; align-items: center; }
+.id-card .hint { color: var(--late); font-size: 13px; }
 .id-foot button { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; color: var(--fg); }
 footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 
@@ -238,9 +238,11 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
 <div class="id-modal" id="id-modal" role="dialog" aria-modal="true" aria-labelledby="id-title" hidden>
   <div class="id-card">
     <h2 id="id-title">你是哪一位？</h2>
-    <p>選擇目前的身分，之後在這台裝置上的每一次勾選與取消，都會記錄在這個名字下，所有成員都看得到。換裝置或清除瀏覽器資料後需要重新選擇。</p>
-    <div class="id-grid" id="id-grid"></div>
-    <div class="id-foot"><span class="hint" id="id-hint"></span><button type="button" id="id-skip">先只瀏覽</button></div>
+    <p>之後在這台裝置上的每一次勾選與取消，都會記錄在這個名字下。可隨時從頁面上方切換。</p>
+    <label class="field" for="id-select">身分</label>
+    <select class="id-select" id="id-select"></select>
+    <span class="hint" id="id-hint"></span>
+    <div class="id-foot"><button type="button" id="id-skip">先只瀏覽</button><button type="button" class="primary" id="id-ok" disabled>確定</button></div>
   </div>
 </div>
 
@@ -293,7 +295,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
 
   const sel = document.getElementById("person");
   sel.innerHTML = '<option value="">全部成員</option>' + D.team.map(m =>
-    `<option value="${esc(m.name)}">${esc(m.name)}（${esc(m.dept)}）</option>`).join("");
+    `<option value="${esc(m.name)}">${esc(m.name)}</option>`).join("");
   if (!D.team.some(m => m.name === state.person)) state.person = "";
   sel.value = state.person;
   const hd = document.getElementById("hide-done");
@@ -509,43 +511,43 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
 
   // Supabase（Cloudflare Pages 版）：不收集 email。
   // 進入網頁先選身分（存在這台裝置的瀏覽器），勾選經由 /api/status 寫入，記錄為這個名字。
-  // 讀取與即時同步用公開金鑰；網站本身由 Cloudflare 的團隊密碼保護。
+  // 讀取與即時同步用公開金鑰。
   async function startSupabase(cfg) {
     if ((!cfg.url || !cfg.anonKey) && window.SITE_CONFIG) cfg = { ...cfg, ...window.SITE_CONFIG };
     const modal = document.getElementById("id-modal");
-    const grid = document.getElementById("id-grid");
+    const pick = document.getElementById("id-select");
+    const ok = document.getElementById("id-ok");
     const hint = document.getElementById("id-hint");
-    const names = new Set(D.team.map(m => m.name));
+    const names = D.team.map(m => m.name);
+    const options = cur => '<option value="">請選擇…</option>' + names.map(n => `<option value="${esc(n)}"${n === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
     B.needIdentity = true;
-    B.me = names.has(store.get("identity", "")) ? store.get("identity", "") : "";
+    B.me = names.includes(store.get("identity", "")) ? store.get("identity", "") : "";
 
+    const setIdentity = name => {
+      const first = !B.me;
+      B.me = name;
+      store.set("identity", name);
+      // 第一次選身分時，順便把成員篩選設成自己
+      if (first && name && !state.person) { state.person = name; sel.value = name; store.set("person", name); }
+      showBar(); render();
+    };
     const showBar = () => {
       authEl.hidden = false;
-      authEl.innerHTML = B.me
-        ? `目前身分：<span class="who-am-i">${esc(B.me)}</span><button type="button" id="id-switch">切換身分</button>`
-        : `尚未選擇身分，只能瀏覽<button type="button" class="primary" id="id-switch">選擇身分</button>`;
-      document.getElementById("id-switch").addEventListener("click", () => B.askIdentity());
+      authEl.innerHTML = `<label for="id-bar">目前身分</label><select id="id-bar">${options(B.me)}</select>${B.me ? "" : "<span>（未選擇只能瀏覽）</span>"}`;
+      document.getElementById("id-bar").addEventListener("change", e => setIdentity(e.target.value));
     };
     const closeModal = () => { modal.hidden = true; document.removeEventListener("keydown", onKey); };
     const onKey = e => { if (e.key === "Escape") closeModal(); };
     B.askIdentity = msg => {
-      grid.innerHTML = D.team.map(m => `<button type="button" data-name="${esc(m.name)}" aria-pressed="${m.name === B.me}">
-        <b>${esc(m.name)}</b><span>${esc(m.dept)}・${esc(m.role)}</span></button>`).join("");
+      pick.innerHTML = options(B.me);
+      ok.disabled = !pick.value;
       hint.textContent = msg || "";
       modal.hidden = false;
       document.addEventListener("keydown", onKey);
-      (grid.querySelector('[aria-pressed="true"]') || grid.querySelector("button")).focus();
+      pick.focus();
     };
-    grid.addEventListener("click", e => {
-      const b = e.target.closest("button[data-name]");
-      if (!b) return;
-      const first = !B.me;
-      B.me = b.dataset.name;
-      store.set("identity", B.me);
-      // 第一次選身分時，順便把成員篩選設成自己
-      if (first && !state.person) { state.person = B.me; sel.value = B.me; store.set("person", B.me); }
-      closeModal(); showBar(); render();
-    });
+    pick.addEventListener("change", () => { ok.disabled = !pick.value; });
+    ok.addEventListener("click", () => { if (pick.value) { setIdentity(pick.value); closeModal(); } });
     document.getElementById("id-skip").addEventListener("click", closeModal);
     showBar();
     if (!B.me) B.askIdentity();
@@ -566,7 +568,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
       if (!res.ok) {
         let detail = "";
         try { detail = (await res.json()).error || ""; } catch (e) {}
-        throw { msg: res.status === 401 ? "團隊密碼已失效，請重新整理頁面" : "沒有存到：" + (detail || "伺服器錯誤 " + res.status) };
+        throw { msg: "沒有存到：" + (detail || "伺服器錯誤 " + res.status) };
       }
     };
 

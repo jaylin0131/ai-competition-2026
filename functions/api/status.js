@@ -1,5 +1,5 @@
 // 勾選完成的寫入入口：POST /api/status  {"key": "jnc_S09", "done": true, "by": "何名綸"}
-// 只有通過 _middleware.js 團隊密碼的人能呼叫；以 Supabase 私密金鑰寫入，金鑰不會出現在網頁。
+// 以 Supabase 私密金鑰寫入，金鑰不會出現在網頁；只接受本站頁面送出的請求。
 // 環境變數：SUPABASE_URL、SUPABASE_SERVICE_KEY（加密）。
 
 const KEY_RE = /^(jnc|qkd)_[A-Z]+[0-9]+$/;

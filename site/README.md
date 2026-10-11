@@ -12,7 +12,7 @@
 
 | 版本 | 指令 | 勾選存在哪 |
 |---|---|---|
-| Cloudflare Pages（正式） | `python3 site/build_site.py --mode supabase --out site/dist/index.html` | Supabase；進入時選身分（不收集 email），寫入經 `functions/api/status.js`。部署步驟見 [deploy/README.md](../deploy/README.md) |
+| Cloudflare Pages（正式） | `python3 site/build_site.py --mode supabase --out site/dist/index.html` | Supabase；進入時從選單選身分（不收集 email、沒有密碼），寫入經 `functions/api/status.js`。部署步驟見 [deploy/README.md](../deploy/README.md) |
 | Claude Artifact（舊版） | `python3 site/build_site.py` → 發布 `site/index.html` | claude.ai 的 Artifact 資料庫，網址 https://claude.ai/artifact/RjNqdJdi1Y2gCYspS18vbV |
 
 產生出來的 `index.html`、`dist/` 不進版控，不要手改。

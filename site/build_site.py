@@ -117,6 +117,7 @@ def main() -> None:
         # 獨立網站需要完整文件；Artifact 版由發布工具包上外框
         html = ('<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                '<meta name="robots" content="noindex">'
                 f'</head><body>{html}</body></html>')
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(html, encoding="utf-8")
