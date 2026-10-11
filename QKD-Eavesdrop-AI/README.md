@@ -55,7 +55,7 @@ tests/      pytest 單元測試
 data/       模擬產生的 CSV（不進 git）
 models/     model.pkl（不進 git）
 reports/    評估圖表，放進說明書
-schedule/   tasks.csv（進度唯一來源）與產生的甘特圖
+schedule/   tasks.csv（由網站每天自動匯出，勿手改）與產生的甘特圖
 scripts/    build_gantt.py
 notes/      會議紀錄
 docs/       計畫、規格、決策、規則
@@ -74,11 +74,4 @@ python -m pytest
 
 ## 更新進度
 
-1. 修改 [schedule/tasks.csv](schedule/tasks.csv) 的 `status`（`todo` / `doing` / `done` / `optional`），必要時調整日期
-2. 重新產生甘特圖：
-
-```bash
-python3 scripts/build_gantt.py
-```
-
-3. 在 [docs/progress.md](docs/progress.md) 新增當週紀錄
+到團隊時程網站 https://ai-competition-schedule.jaylego0810.workers.dev/ 勾選完成、修改或新增任務。`schedule/tasks.csv` 與甘特圖每天由 GitHub Actions 自動同步，不要手改。每週會議後在 [docs/progress.md](docs/progress.md) 新增當週紀錄。

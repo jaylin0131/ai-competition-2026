@@ -30,6 +30,12 @@ TEMPLATE = SITE / "template.html"
 OUT = SITE / "dist" / "index.html"
 SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
 
+# 各作品可用的組別，必須和兩個專案 scripts/build_gantt.py 的 GROUP_ORDER 一致
+GROUPS = {
+    "jnc": ["P1", "P2", "P3", "P4", "P5", "P6", "全員"],
+    "qkd": ["A", "B", "A+B", "C", "全員"],
+}
+
 PROJECTS = [
     {"key": "jnc", "name": "企業組｜銘祥科技 AIoT", "short": "企業組", "dir": "JNC-AIoT",
      "deadline": "M8"},
@@ -101,6 +107,8 @@ def main() -> None:
         "projects": projects,
         "team": team,
         "extraIdentities": EXTRA_IDENTITIES,
+        "groups": GROUPS,
+        "protected": {p["key"]: [p["deadline"]] for p in PROJECTS},
         "keyDates": [
             {"date": "2026-11-28", "label": "隊內送件"},
             {"date": "2026-12-01", "label": "報名截止"},
@@ -118,6 +126,13 @@ def main() -> None:
             f'</head><body>{body}</body></html>')
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(html, encoding="utf-8")
+    # 給伺服器端驗證用：合法組別、名冊、不可刪除的報名截止里程碑
+    meta = {
+        "groups": GROUPS,
+        "members": [m["name"] for m in team] + EXTRA_IDENTITIES,
+        "protected": {p["key"]: [p["deadline"]] for p in PROJECTS},
+    }
+    (args.out.parent / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     n = sum(len(p["tasks"]) for p in projects)
     print(f"已產生 {args.out}：{len(projects)} 個專案、{n} 項任務、{len(team)} 位成員（資料時間 {data['updated']}）")
 

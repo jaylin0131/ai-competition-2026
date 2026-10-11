@@ -175,6 +175,31 @@ button, select { font: inherit; color: inherit; }
 .id-foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; align-items: center; }
 .id-card .hint { color: var(--late); font-size: 13px; }
 .id-foot button { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; color: var(--fg); }
+/* 編輯 */
+.add-btn, .edit-btn { background: var(--fg); color: var(--bg); border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+.chart-head .add-btn { margin-left: auto; }
+.detail-act { grid-column: 1 / -1; }
+.new-wrap { background: var(--surface); border: 1px solid var(--acc); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.new-wrap h3 { margin: 0; font-size: 16px; }
+.detail.ed-wrap { display: block; max-width: min(100vw - 40px, 980px); }
+.row > .detail { z-index: 4; }  /* 蓋過今天線與週格線 */
+.editor { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.ed-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; }
+.ed-grid .wide { grid-column: 1 / -1; }
+.ed-grid label, .ed-ro { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; min-width: 0; }
+.ed-ro b { color: var(--fg); font-size: 15px; padding: 6px 0; }
+.editor input:not([type="checkbox"]), .editor select { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; font-size: 14px; min-width: 0; width: 100%; }
+.editor fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px 8px; margin: 0; min-width: 0; }
+.editor legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
+.ed-people { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.ed-grid .ed-people label.ck { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; color: var(--fg); font-size: 14px; }
+.ed-msg { margin: 0; min-height: 1.2em; color: var(--late); font-size: 13px; }
+.ed-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ed-actions .ed-hint { flex: 1; color: var(--muted); font-size: 12px; min-width: 140px; }
+.ed-actions button { background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; cursor: pointer; font: inherit; font-size: 14px; }
+.ed-actions .primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.ed-actions .primary:disabled { opacity: .5; cursor: default; }
+.ed-actions .danger { color: var(--late); border-color: var(--late); }
 footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 
 @media (max-width: 640px) {
@@ -232,7 +257,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
 
   <footer>
     <span id="updated"></span>
-    <span>勾選「完成」會即時同步給所有成員；任務、日期與負責人來自兩個專案的 schedule/tasks.csv。點任一列可看交付物、相依任務與勾選紀錄。</span>
+    <span>選好身分後可以勾選完成；點任一列可看交付物、相依任務，並編輯這項任務。所有修改即時同步給成員，並記錄是誰、何時改的。</span>
   </footer>
 </div>
 
@@ -260,27 +285,31 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   const TODAY = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5;
   const md = n => { const d = new Date(n * 864e5); return (d.getUTCMonth() + 1) + "/" + d.getUTCDate(); };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const projOrder = Object.fromEntries(D.projects.map((p, i) => [p.key, i]));
 
-  const all = [];
-  D.projects.forEach(p => p.tasks.forEach(t => {
-    t.p = p.key; t.s = dn(t.start); t.e = dn(t.end);
-    t.k = p.key + "_" + t.id;
-    t.ms = /^M\d+$/.test(t.id);
-    all.push(t);
-  }));
-  const byKey = Object.fromEntries(all.map(t => [t.k, t]));
-  const START = Math.min(...all.map(t => t.s)) - 1;
-  const END = Math.max(...all.map(t => t.e)) + 2;
+  // 任務資料：先用建置時嵌入的 tasks.csv 顯示，連上資料庫後改用網站上的規劃（可編輯、即時同步）
+  let all = [], byKey = {}, START = 0, END = 0;
+  let source = "csv";
   const X = n => (n - START) * PX;
+  function setTasks(list) {
+    all = list.map(t => ({ ...t, k: t.p + "_" + t.id, s: dn(t.start), e: dn(t.end), ms: /^M\d+$/.test(t.id) }))
+      .sort((a, b) => (projOrder[a.p] - projOrder[b.p]) || (a.sort - b.sort));
+    byKey = Object.fromEntries(all.map(t => [t.k, t]));
+    START = Math.min(...all.map(t => t.s)) - 1;
+    END = Math.max(...all.map(t => t.e)) + 2;
+  }
+  setTasks(D.projects.flatMap(p => p.tasks.map((t, i) => ({ ...t, p: p.key, sort: (i + 1) * 10, by: "", at: "" }))));
+  const fromRow = r => ({
+    p: r.project, id: r.id, phase: r.phase, group: r.grp, task: r.task, start: r.start_date, end: r.end_date,
+    owners: (r.owners || "").split("、").filter(Boolean), depends: (r.depends || "").split(";").filter(Boolean),
+    status: r.status, deliverable: r.deliverable || "", sort: r.sort, by: r.updated_by_name || "", at: r.updated_at || ""
+  });
 
-  // 成員勾選的完成狀態，覆蓋 tasks.csv 的狀態。key = <作品>_<編號>
-  // 勾選狀態存在 Supabase，經由 /api/status 寫入
-  const OV = {};
-  let canWrite = false;
-  const B = { write: null, names: async () => ({}) };
-  const eff = t => { const o = OV[t.k]; if (!o) return t.status; if (o.done) return "done"; return t.status === "done" ? "doing" : t.status; };
-  const isDone = t => eff(t) === "done";
-  const isLate = t => { const s = eff(t); return (s === "todo" || s === "doing") && t.e < TODAY; };
+  let connected = false;
+  const B = { me: "", askIdentity: null };
+  const canEdit = () => source === "db" && connected;
+  const isDone = t => t.status === "done";
+  const isLate = t => (t.status === "todo" || t.status === "doing") && t.e < TODAY;
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem("gantt:" + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -291,13 +320,15 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     p: ["all", "jnc", "qkd"].includes(hash) ? hash : store.get("p", "all"),
     person: "",  // 每次進入都從「全部成員」開始
     hideDone: store.get("hideDone", false),
-    open: null
+    open: null,
+    edit: null,        // { mode: "edit" | "new", p, k }
+    confirmDel: false,
+    msg: ""
   };
 
   const sel = document.getElementById("person");
   sel.innerHTML = '<option value="">全部成員</option>' + D.team.map(m =>
     `<option value="${esc(m.name)}">${esc(m.name)}</option>`).join("");
-  if (!D.team.some(m => m.name === state.person)) state.person = "";
   sel.value = state.person;
   const hd = document.getElementById("hide-done");
   hd.checked = state.hideDone;
@@ -305,9 +336,10 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   const setSync = (cls, text) => { syncEl.className = "sync " + cls; syncEl.textContent = text; };
   const authEl = document.getElementById("auth");
 
-  const mine = t => !state.person || t.owners.includes(state.person) || t.owners.includes("全員");
+  const base = o => o.replace(/（暫定）$/, "");
+  const mine = t => !state.person || t.owners.map(base).includes(state.person) || t.owners.includes("全員");
   const projName = k => D.projects.find(p => p.key === k).short;
-  const chk = (t, label) => `<input type="checkbox" class="chk" data-k="${t.k}" ${isDone(t) ? "checked" : ""} ${canWrite ? "" : "disabled"} aria-label="${esc(label)}">`;
+  const chk = (t, label) => `<input type="checkbox" class="chk" data-k="${t.k}" ${isDone(t) ? "checked" : ""} ${canEdit() ? "" : "disabled"} aria-label="${esc(label)}">`;
 
   function renderCount() {
     const items = D.keyDates.map(k => ({ ...k, left: dn(k.date) - TODAY }));
@@ -321,7 +353,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     document.getElementById("summary").innerHTML = ps.map(p => {
       const ts = all.filter(t => t.p === p.key && t.status !== "optional" && mine(t));
       const done = ts.filter(isDone).length;
-      const doing = ts.filter(t => eff(t) === "doing").length;
+      const doing = ts.filter(t => t.status === "doing").length;
       const late = ts.filter(isLate).length;
       const pct = ts.length ? Math.round(done / ts.length * 100) : 0;
       const nm = all.filter(t => t.p === p.key && t.ms && !isDone(t) && t.e >= TODAY).sort((a, b) => a.e - b.e)[0];
@@ -341,7 +373,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
 
   function renderWeek() {
     const list = all.filter(t => (state.p === "all" || t.p === state.p) && mine(t) && !t.ms &&
-      (eff(t) === "todo" || eff(t) === "doing") && t.s <= TODAY + 7 && (t.e >= TODAY || isLate(t)))
+      (t.status === "todo" || t.status === "doing") && t.s <= TODAY + 7 && (t.e >= TODAY || isLate(t)))
       .sort((a, b) => a.e - b.e);
     document.getElementById("week-title").textContent = state.person ? `${state.person} 接下來 7 天` : "接下來 7 天";
     const ul = document.getElementById("week");
@@ -349,7 +381,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
       const left = t.e - TODAY, late = isLate(t);
       const due = late ? `逾期 ${-left} 天` : left === 0 ? "今天到期" : `${md(t.e)} 到期・剩 ${left} 天`;
       return `<li style="--acc:${ACC[t.p]}">${chk(t, "標記完成：" + t.id + " " + t.task)}<span class="proj">${projName(t.p)}</span><span class="mono due ${late ? "late" : ""}">${t.id}</span>
-        <span class="t">${esc(t.task)}<br><span class="due ${late ? "late" : ""}">${due}・${STATUS[eff(t)]}</span></span>
+        <span class="t">${esc(t.task)}<br><span class="due ${late ? "late" : ""}">${due}・${STATUS[t.status]}</span></span>
         <span class="who">${esc(t.owners.join("、") || "未指派")}</span></li>`;
     }).join("") : `<li class="empty">這 7 天沒有要進行的任務。</li>`;
   }
@@ -377,9 +409,44 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     const p2 = n => String(n).padStart(2, "0");
     return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
   }
+  const byWhen = t => (t.by || "—") + (fmtTime(t.at) ? " 於 " + fmtTime(t.at) : "");
+
+  // ---------- 編輯表單 ----------
+  function editorHtml(mode, p, t) {
+    const phases = [...new Set(all.filter(x => x.p === p).map(x => x.phase))];
+    const v = t || { id: "", task: "", phase: phases[phases.length - 1] || "", group: (D.groups[p] || [])[0], start: "", end: "", status: "todo", deliverable: "", depends: [], owners: [] };
+    const owned = new Set(v.owners.map(base));
+    const people = D.team.map(m => m.name).concat("全員");
+    const opt = (list, cur, label = x => x) => list.map(x => `<option value="${esc(x)}"${x === cur ? " selected" : ""}>${esc(label(x))}</option>`).join("");
+    const isProtected = t && (D.protected[p] || []).includes(t.id);
+    return `<form class="editor" data-mode="${mode}" data-p="${p}" data-k="${t ? t.k : ""}" novalidate>
+      <div class="ed-grid">
+        ${mode === "new"
+          ? `<label>編號<input id="f-id" required maxlength="10" placeholder="例如 A5、M10" autocomplete="off"></label>`
+          : `<div class="ed-ro"><span>編號</span><b class="mono">${esc(t.id)}</b></div>`}
+        <label class="wide">任務名稱<input id="f-task" required maxlength="120" value="${esc(v.task)}"></label>
+        <label>階段<input id="f-phase" required maxlength="30" list="f-phases-${p}" value="${esc(v.phase)}"><datalist id="f-phases-${p}">${phases.map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
+        <label>組別<select id="f-group">${opt(D.groups[p] || [], v.group)}</select></label>
+        <label>開始日<input id="f-start" type="date" required value="${esc(v.start)}"></label>
+        <label>結束日<input id="f-end" type="date" required value="${esc(v.end)}"></label>
+        <label>狀態<select id="f-status">${opt(Object.keys(STATUS), v.status, x => STATUS[x])}</select></label>
+        <label class="wide">交付物<input id="f-deliv" maxlength="200" value="${esc(v.deliverable)}"></label>
+        <label class="wide">需先完成（填任務編號，多個用逗號分隔）<input id="f-deps" maxlength="100" value="${esc(v.depends.join(", "))}" autocomplete="off"></label>
+        <fieldset class="wide"><legend>負責人</legend><div class="ed-people">${people.map((n, i) =>
+          `<label class="ck"><input type="checkbox" name="f-owner" id="f-owner-${i}" value="${esc(n)}"${owned.has(n) ? " checked" : ""}>${esc(n)}</label>`).join("")}</div></fieldset>
+      </div>
+      <p class="ed-msg" id="f-msg" role="alert">${esc(state.msg)}</p>
+      <div class="ed-actions">
+        ${mode === "edit" && !isProtected ? `<button type="button" class="danger" data-act="delete">${state.confirmDel ? "確定刪除？再按一次" : "刪除這項任務"}</button>` : ""}
+        <span class="ed-hint">${mode === "new" ? "編號用英文大寫加數字；里程碑用 M 開頭、開始與結束同一天" : `最後修改：${esc(byWhen(t))}`}</span>
+        <button type="button" data-act="cancel">取消</button>
+        <button type="submit" class="primary">儲存</button>
+      </div>
+    </form>`;
+  }
 
   function rowHtml(t) {
-    const st = eff(t), late = isLate(t);
+    const st = t.status, late = isLate(t);
     const cls = st + (late ? " late" : "");
     const mark = t.ms
       ? `<span class="ms ${cls}" style="left:${X(t.s) + PX / 2 - 8}px" aria-hidden="true"></span>`
@@ -387,22 +454,41 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     const tagX = t.ms ? X(t.s) + PX + 6 : X(t.e + 1) + 6;
     const tag = late ? `<span class="tag late" style="left:${tagX}px">逾期</span>` : t.ms ? `<span class="tag" style="left:${tagX}px">${md(t.e)}</span>` : "";
     const open = state.open === t.k;
-    const o = OV[t.k];
-    const record = o && o.by
-      ? `<span data-by="${esc(o.by)}">成員</span> 於 ${fmtTime(o.at)} ${o.done ? "勾選完成" : "取消完成"}`
-      : t.status === "done" ? "tasks.csv 標為已完成" : "尚無勾選紀錄";
-    const detail = open ? `<dl class="detail">
+    const editing = state.edit && state.edit.mode === "edit" && state.edit.k === t.k;
+    let detail = "";
+    if (editing) detail = `<div class="detail ed-wrap">${editorHtml("edit", t.p, t)}</div>`;
+    else if (open) detail = `<dl class="detail">
         <div><dt>狀態</dt><dd>${late ? `<span class="pill s-late">逾期</span> ` : ""}<span class="pill s-${st}">${STATUS[st]}</span></dd></div>
         <div><dt>期間</dt><dd class="mono">${t.start} → ${t.end}（${t.e - t.s + 1} 天）</dd></div>
         <div><dt>負責</dt><dd>${esc(t.owners.join("、") || "未指派")}　<span class="s-todo">${esc(t.group)} 組</span></dd></div>
         <div><dt>交付物</dt><dd>${esc(t.deliverable || "—")}</dd></div>
         <div><dt>需先完成</dt><dd class="mono">${esc(t.depends.join("、") || "—")}</dd></div>
-        <div><dt>勾選紀錄</dt><dd>${record}</dd></div>
-      </dl>` : "";
-    return `<div class="row ${mine(t) ? "" : "dim"} ${st === "done" ? "is-done" : ""}" data-k="${t.k}" role="button" tabindex="0" aria-expanded="${open}"
+        <div><dt>最後修改</dt><dd>${source === "db" && t.by ? esc(byWhen(t)) : "—"}</dd></div>
+        ${canEdit() ? `<div class="detail-act"><button type="button" class="edit-btn" data-edit="${t.k}">編輯這項任務</button></div>` : ""}
+      </dl>`;
+    return `<div class="row ${mine(t) ? "" : "dim"} ${st === "done" ? "is-done" : ""}" data-k="${t.k}" role="button" tabindex="0" aria-expanded="${open || editing}"
         aria-label="${esc(t.id + " " + t.task + "，" + (late ? "逾期，" : "") + STATUS[st] + "，" + t.start + " 到 " + t.end)}">
       <div class="lab"><div class="head">${chk(t, "標記完成：" + t.id + " " + t.task)}<span class="name"><span class="id">${t.id}</span><span class="txt">${esc(t.task)}</span></span></div><span class="own meta">${esc(t.owners.join("、") || "未指派")}</span></div>
       <div class="track" style="width:${(END - START) * PX}px">${mark}${tag}</div>${detail}</div>`;
+  }
+
+  // 重畫時保留表單裡正在輸入的內容（別人的修改即時同步進來時不會洗掉）
+  function snapshotForm() {
+    const f = document.querySelector("form.editor");
+    if (!f) return null;
+    const vals = {};
+    f.querySelectorAll("input, select").forEach(el => { vals[el.id] = el.type === "checkbox" ? el.checked : el.value; });
+    const active = document.activeElement && f.contains(document.activeElement) ? document.activeElement.id : "";
+    return { key: f.dataset.mode + f.dataset.p + f.dataset.k, vals, active };
+  }
+  function restoreForm(snap) {
+    const f = document.querySelector("form.editor");
+    if (!snap || !f || snap.key !== f.dataset.mode + f.dataset.p + f.dataset.k) return;
+    f.querySelectorAll("input, select").forEach(el => {
+      if (!(el.id in snap.vals)) return;
+      if (el.type === "checkbox") el.checked = snap.vals[el.id]; else el.value = snap.vals[el.id];
+    });
+    if (snap.active) { const a = document.getElementById(snap.active); if (a) a.focus({ preventScroll: true }); }
   }
 
   function renderCharts() {
@@ -410,17 +496,21 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     const ps = D.projects.filter(p => state.p === "all" || p.key === state.p);
     const box = document.getElementById("charts");
     const keep = [...box.querySelectorAll(".scroller")].map(s => s.scrollLeft);
+    const snap = snapshotForm();
     box.innerHTML = ps.map(p => {
       let body = "", phase = "";
       const ts = all.filter(t => t.p === p.key);
       ts.forEach(t => {
-        if (state.hideDone && isDone(t)) return;
+        if (state.hideDone && isDone(t) && !(state.edit && state.edit.k === t.k)) return;
         if (t.phase !== phase) { phase = t.phase; body += `<div class="phase"><div class="lab">${esc(phase)}</div><div></div></div>`; }
         body += rowHtml(t);
       });
       const d = ts.filter(isDone).length;
+      const adding = state.edit && state.edit.mode === "new" && state.edit.p === p.key;
       return `<section class="chart" style="--acc:${ACC[p.key]}" aria-label="${esc(p.name)} 甘特圖">
-        <div class="chart-head"><h2>${esc(p.name)}</h2><span class="sub">${ts.length} 項任務・${d} 項已完成${state.person ? "・淡色列為其他成員的任務" : ""}</span></div>
+        <div class="chart-head"><h2>${esc(p.name)}</h2><span class="sub">${ts.length} 項任務・${d} 項已完成${state.person ? "・淡色列為其他成員的任務" : ""}</span>
+          ${canEdit() && !adding ? `<button type="button" class="add-btn" data-add="${p.key}">＋ 新增任務</button>` : ""}</div>
+        ${adding ? `<div class="new-wrap"><h3>新增任務</h3>${editorHtml("new", p.key, null)}</div>` : ""}
         <div class="scroller"><div class="gantt" style="width:${labelW + (END - START) * PX}px">${axisHtml()}${body}${overlays(labelW)}</div></div>
       </section>`;
     }).join("");
@@ -429,16 +519,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
       s.scrollLeft = keep[i] !== undefined ? keep[i] : Math.max(0, X(TODAY) - 7 * PX);
       s.style.scrollBehavior = "";
     });
-    fillNames();
-  }
-
-  async function fillNames() {
-    const els = [...document.querySelectorAll("[data-by]")];
-    if (!els.length) return;
-    try {
-      const names = await B.names([...new Set(els.map(e => e.dataset.by))]);
-      els.forEach(e => { e.textContent = names[e.dataset.by] || "某位成員"; });
-    } catch (e) {}
+    restoreForm(snap);
   }
 
   function render() {
@@ -446,25 +527,97 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     renderCount(); renderSummary(); renderWeek(); renderCharts();
   }
 
+  // ---------- 寫入 ----------
+  let reload = async () => {};
+  async function api(body) {
+    let res;
+    try {
+      res = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, by: B.me }) });
+    } catch (e) { throw new Error("連不上伺服器，請檢查網路"); }
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) { const err = new Error(data.error || "伺服器錯誤 " + res.status); err.status = res.status; throw err; }
+    return data;
+  }
+  const needIdentity = msg => { if (B.me) return false; B.askIdentity && B.askIdentity(msg); return true; };
+
   async function toggleDone(k, done) {
     const t = byKey[k];
-    if (!t || !B.write || !canWrite) return;
-    if (B.needIdentity && !B.me) { render(); B.askIdentity && B.askIdentity("請先選擇身分，勾選才會記在你的名字下"); return; }
-    const prev = OV[k];
-    OV[k] = { done, by: B.me || "", at: new Date().toISOString() };
+    if (!t || !canEdit()) return;
+    if (needIdentity("請先選擇身分，操作才會記在你的名字下")) { render(); return; }
+    const prev = t.status;
+    t.status = done ? "done" : (prev === "done" ? (t.s <= TODAY ? "doing" : "todo") : prev);
     render();
     try {
-      await B.write(t, done, OV[k].at);
-      setSync("live", "已同步，所有成員都看得到");
+      await api({ action: "status", key: k, done });
+      setSync("live", "已儲存，所有成員都看得到");
     } catch (e) {
-      if (prev) OV[k] = prev; else delete OV[k];
-      render();
-      setSync("err", (e && e.msg) || (e && e.denied ? "你沒有寫入權限" : "沒有存到，請檢查網路後再勾一次"));
+      t.status = prev; render();
+      setSync("err", "沒有存到：" + e.message);
     }
   }
 
+  function sortFor(p, phase, exceptK) {
+    const ts = all.filter(x => x.p === p && x.k !== exceptK);
+    const inPhase = ts.filter(x => x.phase === phase);
+    if (!inPhase.length) return (ts.length ? Math.max(...ts.map(x => x.sort)) : 0) + 10;
+    const last = inPhase[inPhase.length - 1];
+    const next = ts.find(x => x.sort > last.sort);
+    return next ? (last.sort + next.sort) / 2 : last.sort + 10;
+  }
+
+  async function submitEditor(f) {
+    const val = id => (f.querySelector("#" + id) || {}).value || "";
+    const mode = f.dataset.mode, p = f.dataset.p, k = f.dataset.k;
+    const cur = byKey[k];
+    const checked = [...f.querySelectorAll('input[name="f-owner"]:checked')].map(el => el.value);
+    const prevOwners = cur ? cur.owners : [];
+    const owners = checked.map(n => prevOwners.includes(n + "（暫定）") ? n + "（暫定）" : n);
+    const task = {
+      project: p, id: val("f-id").trim().toUpperCase(), task: val("f-task"), phase: val("f-phase").trim(), group: val("f-group"),
+      start: val("f-start"), end: val("f-end"), status: val("f-status"), deliverable: val("f-deliv"),
+      depends: val("f-deps").split(/[,，;；、\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean), owners
+    };
+    const fail = m => { state.msg = m; const el = f.querySelector("#f-msg"); if (el) el.textContent = m; };
+    if (mode === "new" && !/^[A-Z]+[0-9]+$/.test(task.id)) return fail("編號要像 A5、S12、M3（英文大寫加數字）");
+    if (mode === "new" && byKey[p + "_" + task.id]) return fail(`編號 ${task.id} 已經有了，請換一個`);
+    if (!task.task.trim()) return fail("請填任務名稱");
+    if (!task.phase) return fail("請填階段");
+    if (!task.start || !task.end) return fail("請填開始日與結束日");
+    if (task.end < task.start) return fail("結束日不能早於開始日");
+    if (mode === "new" || (cur && cur.phase !== task.phase)) task.sort = sortFor(p, task.phase, k);
+    const btn = f.querySelector('button[type="submit"]');
+    btn.disabled = true; fail("儲存中…");
+    try {
+      if (mode === "new") await api({ action: "create", task });
+      else await api({ action: "update", key: k, task, expected: cur ? cur.at : "" });
+      state.edit = null; state.msg = ""; state.confirmDel = false;
+      if (mode === "new") state.open = p + "_" + task.id;
+      await reload();
+      setSync("live", "已儲存，所有成員都看得到");
+    } catch (e) {
+      btn.disabled = false;
+      if (e.status === 409 || e.status === 404) await reload();
+      fail(e.message);
+    }
+  }
+
+  async function deleteTask(k) {
+    const t = byKey[k];
+    if (!t) return;
+    try {
+      await api({ action: "delete", key: k });
+      state.edit = null; state.open = null; state.msg = ""; state.confirmDel = false;
+      await reload();
+      setSync("live", `已刪除 ${t.id}`);
+    } catch (e) {
+      state.confirmDel = false; state.msg = e.message; render();
+    }
+  }
+
+  // ---------- 事件 ----------
   document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
-    state.p = b.dataset.p; store.set("p", state.p); state.open = null;
+    state.p = b.dataset.p; store.set("p", state.p); state.open = null; state.edit = null;
     document.getElementById("charts").innerHTML = "";
     render();
   }));
@@ -472,46 +625,60 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   hd.addEventListener("change", () => { state.hideDone = hd.checked; store.set("hideDone", state.hideDone); render(); });
   document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("chk")) toggleDone(e.target.dataset.k, e.target.checked); });
   const charts = document.getElementById("charts");
-  const toggle = row => { const k = row.dataset.k; state.open = state.open === k ? null : k; renderCharts(); const r = charts.querySelector(`.row[data-k="${k}"]`); if (r) r.focus({ preventScroll: true }); };
-  charts.addEventListener("click", e => { if (e.target.closest(".detail") || e.target.classList.contains("chk")) return; const r = e.target.closest(".row"); if (r) toggle(r); });
-  charts.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); toggle(e.target); } });
+  const toggle = row => {
+    const k = row.dataset.k;
+    if (state.edit && state.edit.k === k) return;
+    state.open = state.open === k ? null : k;
+    renderCharts();
+    const r = charts.querySelector(`.row[data-k="${k}"]`); if (r) r.focus({ preventScroll: true });
+  };
+  charts.addEventListener("click", e => {
+    const add = e.target.closest("[data-add]");
+    if (add) { if (needIdentity("請先選擇身分，新增的任務才會記在你的名字下")) return; state.edit = { mode: "new", p: add.dataset.add, k: "" }; state.msg = ""; renderCharts(); const i = document.getElementById("f-id"); if (i) i.focus(); return; }
+    const ed = e.target.closest("[data-edit]");
+    if (ed) { if (needIdentity("請先選擇身分，修改才會記在你的名字下")) return; const t = byKey[ed.dataset.edit]; state.edit = { mode: "edit", p: t.p, k: t.k }; state.msg = ""; state.confirmDel = false; renderCharts(); const i = document.getElementById("f-task"); if (i) i.focus(); return; }
+    const act = e.target.closest("[data-act]");
+    if (act) {
+      const f = act.closest("form.editor");
+      if (act.dataset.act === "cancel") { state.edit = null; state.msg = ""; state.confirmDel = false; renderCharts(); return; }
+      if (act.dataset.act === "delete") {
+        if (!state.confirmDel) { state.confirmDel = true; act.textContent = "確定刪除？再按一次"; return; }
+        deleteTask(f.dataset.k); return;
+      }
+    }
+    if (e.target.closest(".detail") || e.target.closest(".new-wrap") || e.target.classList.contains("chk")) return;
+    const r = e.target.closest(".row"); if (r) toggle(r);
+  });
+  charts.addEventListener("submit", e => { if (e.target.matches("form.editor")) { e.preventDefault(); submitEditor(e.target); } });
+  charts.addEventListener("keydown", e => {
+    if (e.key === "Escape" && state.edit) { state.edit = null; state.msg = ""; renderCharts(); return; }
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("row")) { e.preventDefault(); toggle(e.target); }
+  });
 
-  document.getElementById("updated").textContent = `任務資料（tasks.csv）更新時間：${D.updated}`;
+  const updatedEl = document.getElementById("updated");
+  updatedEl.textContent = `目前顯示 tasks.csv（${D.updated}）`;
   render();
 
-  const applyRows = rows => {
-    for (const k of Object.keys(OV)) delete OV[k];
-    rows.forEach(r => { if (byKey[r.k] && typeof r.done === "boolean") OV[r.k] = { done: r.done, by: String(r.by || ""), at: String(r.at || "") }; });
-    render();
-  };
-
-  // Supabase：不收集 email。
-  // 進入網頁先選身分（存在這台裝置的瀏覽器），勾選經由 /api/status 寫入，記錄為這個名字。
-  // 讀取與即時同步用公開金鑰。
+  // ---------- 身分與資料庫 ----------
+  // 不收集 email：進入網頁先選身分（存在這台裝置的瀏覽器），所有修改都記錄為這個名字。
+  // 讀取與即時同步用公開金鑰；寫入一律經過 /api/tasks（伺服器端驗證後以私密金鑰寫入）。
   async function startSupabase(cfg) {
     if ((!cfg.url || !cfg.anonKey) && window.SITE_CONFIG) cfg = { ...cfg, ...window.SITE_CONFIG };
     const modal = document.getElementById("id-modal");
     const pick = document.getElementById("id-select");
     const ok = document.getElementById("id-ok");
     const hint = document.getElementById("id-hint");
-    const members = D.team.map(m => m.name);
-    const extras = D.extraIdentities || [];
-    const names = members.concat(extras);
+    const names = D.team.map(m => m.name).concat(D.extraIdentities || []);
     const opt = cur => n => `<option value="${esc(n)}"${n === cur ? " selected" : ""}>${esc(n)}</option>`;
     const options = cur => '<option value="">請選擇…</option>' + names.map(opt(cur)).join("");
-    B.needIdentity = true;
     B.me = names.includes(store.get("identity", "")) ? store.get("identity", "") : "";
 
-    const setIdentity = name => {
-      B.me = name;
-      store.set("identity", name);
-      showBar(); render();
-    };
     const showBar = () => {
       authEl.hidden = false;
       authEl.innerHTML = `<label for="id-bar">目前身分</label><select id="id-bar">${options(B.me)}</select>${B.me ? "" : "<span>（未選擇只能瀏覽）</span>"}`;
       document.getElementById("id-bar").addEventListener("change", e => setIdentity(e.target.value));
     };
+    const setIdentity = name => { B.me = name; store.set("identity", name); showBar(); render(); };
     const closeModal = () => { modal.hidden = true; document.removeEventListener("keydown", onKey); };
     const onKey = e => { if (e.key === "Escape") closeModal(); };
     B.askIdentity = msg => {
@@ -528,38 +695,37 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     showBar();
     if (!B.me) B.askIdentity();
 
-    B.names = async ids => Object.fromEntries(ids.map(id => [id, id === B.me ? id + "（你）" : id]));
-
-    if (!window.supabase || !cfg.url || !cfg.anonKey) { setSync("", "唯讀：網站尚未連上資料庫，只顯示 tasks.csv 的狀態"); return; }
+    if (!window.supabase || !cfg.url || !cfg.anonKey) { setSync("", "唯讀：網站尚未連上資料庫，只顯示 tasks.csv"); return; }
     const sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
-    B.write = async (t, done) => {
-      let res;
-      try {
-        res = await fetch("/api/status", {
-          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
-          body: JSON.stringify({ key: t.k, done, by: B.me })
-        });
-      } catch (e) { throw { msg: "沒有存到，請檢查網路後再勾一次" }; }
-      if (!res.ok) {
-        let detail = "";
-        try { detail = (await res.json()).error || ""; } catch (e) {}
-        throw { msg: "沒有存到：" + (detail || "伺服器錯誤 " + res.status) };
+    reload = async () => {
+      const { data, error } = await sb.from("tasks").select("*").order("project").order("sort");
+      if (error) {
+        const missing = /does not exist|could not find the table|PGRST205|42P01/i.test((error.code || "") + " " + (error.message || ""));
+        setSync("err", missing ? "網站資料庫還沒有任務表：請在 Supabase 重新執行 deploy/supabase.sql，再到 GitHub Actions 執行「匯入 tasks.csv 到網站」" : "讀取失敗：" + error.message);
+        return;
       }
+      if (!data.length) {
+        source = "csv";
+        setSync("ro", "網站資料庫還沒有任務：請到 GitHub Actions 執行「匯入 tasks.csv 到網站」，目前只能瀏覽");
+        render();
+        return;
+      }
+      source = "db";
+      setTasks(data.map(fromRow));
+      if (state.edit && state.edit.mode === "edit" && !byKey[state.edit.k]) { state.edit = null; state.msg = "這項任務已被其他人刪除"; }
+      if (state.open && !byKey[state.open]) state.open = null;
+      updatedEl.textContent = "規劃即時儲存在網站上；兩個專案的 tasks.csv 每天自動同步一次";
+      render();
     };
-
-    const load = async () => {
-      const { data, error } = await sb.from("task_status").select("key,done,updated_by_name,updated_at");
-      if (error) { setSync("err", "讀取失敗：" + error.message); return; }
-      applyRows(data.map(r => ({ k: r.key, done: r.done, by: r.updated_by_name, at: r.updated_at })));
-    };
-    canWrite = true;
-    await load();
-    sb.channel("task_status")
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_status" }, load)
+    connected = true;
+    await reload();
+    let timer = null;
+    sb.channel("tasks")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => { clearTimeout(timer); timer = setTimeout(reload, 300); })
       .subscribe(st => {
-        if (st === "SUBSCRIBED") setSync("live", "已連線：勾選會即時同步給所有成員");
-        else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") setSync("ro", "即時同步中斷：勾選仍會儲存，重新整理可看到別人的更新");
+        if (st === "SUBSCRIBED" && source === "db") setSync("live", "已連線：修改會即時同步給所有成員");
+        else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") setSync("ro", "即時同步中斷：修改仍會儲存，重新整理可看到別人的更新");
       });
   }
 

@@ -55,7 +55,7 @@
 | [docs/progress.md](docs/progress.md) | 進度紀錄與資料初步發現 |
 | [docs/decisions-pending.md](docs/decisions-pending.md) | 待決定事項 D1–D6、待問主辦 Q1–Q7 |
 | [docs/data-dictionary.md](docs/data-dictionary.md) | 7 個場域的欄位、期間、缺漏、異常值（自動產生） |
-| [schedule/tasks.csv](schedule/tasks.csv) | 所有任務、負責人、日期、相依、狀態（進度唯一來源） |
+| [schedule/tasks.csv](schedule/tasks.csv) | 所有任務、負責人、日期、相依、狀態（網站規劃每天自動匯出的副本，勿手改；要改請到 https://ai-competition-schedule.jaylego0810.workers.dev/） |
 | [docs/銘祥科技命題_AI分析與6人分工規劃_v2.pdf](docs/銘祥科技命題_AI分析與6人分工規劃_v2.pdf) | 給隊員看的完整規劃（每人交付物、成果數字、demo 流程） |
 | `../2026全國AI專題創意競賽_參賽攻略手冊.pdf` | 指導老師課題組編的攻略手冊（注意：手冊主張自建硬體，已被決定 1 取代） |
 
@@ -65,7 +65,7 @@
 - 工地微氣候標題前有 2 列 HH／HI 要跳過；育成北側日期、小時有補零（已在 load_jnc 處理）
 - 專家系統沒有增氧機開關欄位，要從「CPM 系統總和功率」推斷；無功功率為負是正常的
 - 改了 `prepare_data.py` 或原始資料後要重跑它，`docs/data-dictionary.md` 與 `data/processed/` 會一起更新
-- 改了 `schedule/tasks.csv` 後要重跑 `scripts/build_gantt.py`；`gantt.html`、`gantt.md` 不要手動改
+- 規劃在團隊時程網站上修改；`tasks.csv`、`gantt.html`、`gantt.md` 都是每天自動產生的，不要手動改
 - `scripts/build_plan_pdf_v*.py` 需要 `reportlab` 與 macOS 內建黑體，只在改規劃 PDF 時用
 - 原始資料僅供競賽使用，不要上傳到公開的 repo（GitHub 請設為私人）
 

@@ -8,11 +8,11 @@
 |---|---|
 | [JNC-AIoT/](JNC-AIoT/) | 企業命題類 AI 應用組：銘祥科技 AIoT 預測維護與異常診斷 |
 | [QKD-Eavesdrop-AI/](QKD-Eavesdrop-AI/) | 大會專題類資電領域組：QKD 鏈路 AI 健康診斷 |
-| [site/](site/) | 團隊時程網站：合併兩份 `tasks.csv` 的甘特圖，成員可勾選完成 |
+| [site/](site/) | 團隊時程網站：兩件作品的甘特圖，成員可在線上勾選、修改、新增、刪除任務 |
 | [deploy/](deploy/) | 網站部署說明（Cloudflare Pages＋Supabase）與資料庫 SQL |
-| [functions/](functions/)、[worker/](worker/)、`wrangler.jsonc` | Cloudflare 伺服器端程式：寫入勾選（Workers 與 Pages 共用） |
-| `.github/workflows/` | 每日把網站勾選寫回 `tasks.csv` |
+| [functions/](functions/)、[worker/](worker/)、`wrangler.jsonc` | Cloudflare 伺服器端程式：驗證並寫入規劃的修改（Workers 與 Pages 共用） |
+| `.github/workflows/` | 每天把網站規劃匯出到 `tasks.csv`；一次性把 `tasks.csv` 匯入網站 |
 
-- 進度唯一來源：各專案的 `schedule/tasks.csv`
+- 進度與規劃的唯一來源：團隊時程網站（Supabase 資料庫）。各專案的 `schedule/tasks.csv` 每天自動匯出，不要手改
 - 企業原始資料（`JNC-AIoT/data/raw/*.csv`）不進版控，請從命題頁下載後執行 `JNC-AIoT/scripts/prepare_data.py`
 - 本儲存庫為私人，請勿改成公開

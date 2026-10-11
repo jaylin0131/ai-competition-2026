@@ -1,0 +1,31 @@
+name: 匯入 tasks.csv 到網站
+
+# 第一次啟用「網站上編輯規劃」時執行一次：把兩個專案目前的 tasks.csv 匯入 Supabase。
+# 資料庫已有任務時會拒絕；勾選「replace」才會用 tasks.csv 整份覆蓋網站上的規劃（網站上的修改會不見）。
+on:
+  workflow_dispatch:
+    inputs:
+      replace:
+        description: "用 tasks.csv 整份覆蓋網站上的規劃（會丟掉網站上的修改）"
+        type: boolean
+        default: false
+
+concurrency:
+  group: tasks-db
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 匯入
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python site/tasks_db.py import ${{ inputs.replace && '--replace' || '' }}

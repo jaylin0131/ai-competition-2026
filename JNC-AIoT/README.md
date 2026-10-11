@@ -34,7 +34,7 @@ JNC-AIoT/
 ├── tests/
 ├── notes/eda/            資料初探（每個資料集 1 頁）
 ├── notes/meetings/       週會紀錄
-├── schedule/             tasks.csv（進度唯一來源）、gantt.html、gantt.md
+├── schedule/             tasks.csv（由網站每天自動匯出，勿手改）、gantt.html、gantt.md
 ├── scripts/              prepare_data.py、build_gantt.py、build_plan_pdf_v*.py
 └── docs/                 架構、資料字典、進度、待決事項、規劃 PDF
 ```
@@ -60,7 +60,7 @@ from common.load_jnc import load, SITES
 df = load("pond")   # pond / river / goat / yucheng_north / yucheng1 / northeast / construction
 ```
 
-更新進度：改 `schedule/tasks.csv` 的 `status`（todo / doing / done / optional），再執行 `scripts/build_gantt.py`。
+更新進度：到團隊時程網站 https://ai-competition-schedule.jaylego0810.workers.dev/ 勾選完成、修改或新增任務；`schedule/tasks.csv` 與甘特圖每天自動同步。
 
 ## 參考來源
 

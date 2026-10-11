@@ -51,7 +51,7 @@
 
 | 要找 | 檔案 |
 |---|---|
-| 進度唯一來源 | `schedule/tasks.csv` → `python3 scripts/build_gantt.py` 產生 `schedule/gantt.html`、`gantt.md` |
+| 進度與規劃 | 團隊時程網站 https://ai-competition-schedule.jaylego0810.workers.dev/（唯一來源）；`schedule/tasks.csv`、`gantt.html`、`gantt.md` 每天自動匯出，勿手改 |
 | 架構、各組規格、風險 | `docs/project-plan.md` |
 | 名冊與分工 | `schedule/team.csv`（名冊）、`docs/team.md`（分工說明）、`tasks.csv` 的 `owner` 欄 |
 | 待決事項（附建議答案） | `docs/decisions-pending.md` |
@@ -71,7 +71,7 @@
 
 - 一律使用**繁體中文**（台灣用語）
 - 兄弟專案 `../WorkSense-AI`、`../JNC-AIoT` 的慣例：README 列文件連結、`docs/decisions-pending.md` 用勾選框＋➡️ 建議、ADR 為一段話、GLOSSARY.md
-- 時程改動一律改 `tasks.csv` 再重產甘特圖，不要手改 gantt.html／gantt.md
+- 時程改動一律在團隊時程網站上做；tasks.csv 與甘特圖每天自動同步，不要手改
 
 ## 八、未解問題
 
