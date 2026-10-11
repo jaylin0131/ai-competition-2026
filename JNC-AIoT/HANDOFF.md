@@ -31,7 +31,8 @@
 
 ## 3. 目前狀態（2026-10-11）
 
-- 進度 4/38（11%），沒有落後；進行中：S05 確認名冊與角色（P5、P6 暫定）、指導老師
+- 進度 4/36（11%），沒有落後；進行中：S05 確認名冊與角色（P5、P6 暫定）
+- 10/11 確定：指導老師為黃秋杰老師（D2）；取消 S06（寄信問主辦，Q1–Q7 暫不詢問，維修紀錄改用合成故障注入評估）與 S07（GitHub 等，已由上層私人儲存庫 `jaylin0131/ai-competition-2026`取代）；團隊時程網站見 ../site/ 與 ../deploy/
 - 10/11 加入隊員名單：新增 [docs/team.md](docs/team.md)、tasks.csv 加 owner 欄、甘特圖顯示姓名。許程景、林子桀負擔過重，team.md 有重新分配建議（未套用）
 - 10/11 依參賽進度分析報告修正：tasks.csv 改用報告的里程碑、architecture.md 移除 Breeze 並加入合規模型清單與技術路線、閉環改為回放器軟體閉環、D1／D3／D5／D6 更新建議、併入上層單一私人儲存庫（見 ../README.md）
 - 已完成：規則與命題整理、規劃 PDF v2、下載 7 個 CSV、共用讀檔、資料整理、資料字典、架構文件、甘特圖
@@ -39,8 +40,8 @@
 
 ## 4. 下一步
 
-1. 10/12 會議：定案 P5、P6，決定是否採用 team.md 的重新分配建議（A1 給何名綸、E5 給王端宏），確認范語芸的歸屬與指導老師（D1、D2）→ 更新 team.md、tasks.csv owner 欄、decisions-pending.md，S05 改 done
-2. P1 10/14 前寄信問主辦（Q1–Q7，特別是維修紀錄與 GI）；建立私人 GitHub 並推上本資料夾（`data/` 已被 .gitignore 排除）
+1. 10/12 會議：定案 P5、P6，決定是否採用 team.md 的重新分配建議（A1 給何名綸、E5 給王端宏），確認范語芸的歸屬（D1）→ 更新 team.md、tasks.csv owner 欄、decisions-pending.md，S05 改 done
+2. 每人 clone 上層私人儲存庫 `jaylin0131/ai-competition-2026`（企業原始資料不在 repo 內，請從命題頁下載後執行 `scripts/prepare_data.py`）
 3. 每人執行 `scripts/prepare_data.py`，10/18 前交 S09 資料品質報告（每組 1 頁），成果放 `notes/eda/`
 4. 10/18 前定稿 [architecture.md](docs/architecture.md) 第 4 節的模組介面（S10、M1），並完成本地 LLM 實測（S11）
 5. 10/19 起進入第一版開發；10/25 交基準版比較表，10/31 檢查點要求魚塭五項輸出都有第一版
