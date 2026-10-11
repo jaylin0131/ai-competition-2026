@@ -43,7 +43,11 @@ button, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--qkd); outline-offset: 2px; }
 
 /* 頂部 */
-.top { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: end; justify-content: space-between; }
+/* 第一列：標題｜右上角目前身分；第二列：倒數 */
+.top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 24px; align-items: start; }
+.top .title { grid-column: 1; min-width: 0; }
+.top .auth { grid-column: 2; grid-row: 1; justify-self: end; }
+.top .count { grid-column: 1 / -1; }
 .title h1 { font-size: 30px; font-weight: 900; letter-spacing: .01em; }
 .title p { margin: 4px 0 0; color: var(--muted); }
 .count { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -159,7 +163,7 @@ button, select { font: inherit; color: inherit; }
 .sync.err { color: var(--late); }
 .sync.err::before { background: var(--late); }
 .week-list li { grid-template-columns: 24px 92px 64px 1fr auto; }
-.auth { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
+.auth { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; font-size: 14px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px 6px 12px; }
 .auth .who-am-i { color: var(--fg); font-weight: 700; }
 .auth button { background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
 .auth button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
@@ -196,6 +200,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
       <h1>AI 競賽團隊時程</h1>
       <p>2026 全國 AI 專題創意競賽・企業組與資電組兩件作品</p>
     </div>
+    <div class="auth" id="auth" hidden></div>
     <div class="count" id="count" aria-label="關鍵日期倒數"></div>
   </header>
 
@@ -210,7 +215,6 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     </label>
     <label class="field" for="hide-done"><input type="checkbox" id="hide-done"> 隱藏已完成</label>
     <span class="sync" id="sync" role="status">連線中…</span>
-    <div class="auth" id="auth" hidden></div>
     <div class="legend" aria-hidden="true">
       <span><i class="lg-done"></i>已完成</span>
       <span><i class="lg-doing"></i>進行中</span>
