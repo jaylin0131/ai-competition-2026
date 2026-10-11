@@ -2,6 +2,8 @@
 
 同一支隊伍的兩件作品與團隊時程網站。
 
+**團隊時程網站：** https://ai-competition-schedule.jaylego0810.workers.dev/
+
 | 資料夾 | 內容 |
 |---|---|
 | [JNC-AIoT/](JNC-AIoT/) | 企業命題類 AI 應用組：銘祥科技 AIoT 預測維護與異常診斷 |

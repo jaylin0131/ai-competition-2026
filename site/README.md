@@ -2,6 +2,8 @@
 
 把 `JNC-AIoT` 與 `QKD-Eavesdrop-AI` 兩個專案的 `schedule/tasks.csv` 合併成一頁甘特圖，成員可在網頁上勾選完成。
 
+網址：https://ai-competition-schedule.jaylego0810.workers.dev/
+
 | 檔案 | 用途 |
 |---|---|
 | `template.html` | 版面與程式（要改外觀改這裡） |

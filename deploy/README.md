@@ -1,5 +1,7 @@
 # 團隊時程網站部署：Cloudflare Pages＋Supabase（不收集 email）
 
+目前網址：https://ai-competition-schedule.jaylego0810.workers.dev/
+
 完成後：
 - 網址 `https://ai-competition-schedule.<子網域>.workers.dev`（或 Pages 的 `.pages.dev`），任何拿到網址的人都能打開
 - 第一次進入從選單選擇「你是哪一位」，之後在甘特圖上勾選完成，其他人即時看到，每次勾選與取消都記錄身分與時間
