@@ -38,6 +38,8 @@ PROJECTS = [
     {"key": "qkd", "name": "資電組｜QKD 鏈路健康診斷", "short": "資電組", "dir": "QKD-Eavesdrop-AI",
      "deadline": "M7"},
 ]
+# 身分選單除了 team.csv 的成員之外，額外列出的身分（不負責任務，不出現在成員篩選）
+EXTRA_IDENTITIES = ["指導老師"]
 FIELDS = ["id", "phase", "group", "owner", "task", "start", "end", "depends", "status", "deliverable"]
 STATUSES = {"done", "doing", "todo", "optional"}
 
@@ -101,6 +103,7 @@ def main() -> None:
         "updated": last_change(newest),
         "projects": projects,
         "team": team,
+        "extraIdentities": EXTRA_IDENTITIES,
         "exam": ["2026-11-02", "2026-11-13"],
         "keyDates": [
             {"date": "2026-11-28", "label": "隊內送件"},

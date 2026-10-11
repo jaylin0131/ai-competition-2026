@@ -522,8 +522,13 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     const pick = document.getElementById("id-select");
     const ok = document.getElementById("id-ok");
     const hint = document.getElementById("id-hint");
-    const names = D.team.map(m => m.name);
-    const options = cur => '<option value="">請選擇…</option>' + names.map(n => `<option value="${esc(n)}"${n === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
+    const members = D.team.map(m => m.name);
+    const extras = D.extraIdentities || [];
+    const names = members.concat(extras);
+    const opt = cur => n => `<option value="${esc(n)}"${n === cur ? " selected" : ""}>${esc(n)}</option>`;
+    const options = cur => '<option value="">請選擇…</option>'
+      + `<optgroup label="成員">${members.map(opt(cur)).join("")}</optgroup>`
+      + (extras.length ? `<optgroup label="其他">${extras.map(opt(cur)).join("")}</optgroup>` : "");
     B.needIdentity = true;
     B.me = names.includes(store.get("identity", "")) ? store.get("identity", "") : "";
 
@@ -532,7 +537,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
       B.me = name;
       store.set("identity", name);
       // 第一次選身分時，順便把成員篩選設成自己
-      if (first && name && !state.person) { state.person = name; sel.value = name; store.set("person", name); }
+      if (first && members.includes(name) && !state.person) { state.person = name; sel.value = name; store.set("person", name); }
       showBar(); render();
     };
     const showBar = () => {
