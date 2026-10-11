@@ -39,7 +39,7 @@ PROJECTS = [
      "deadline": "M7"},
 ]
 # 身分選單除了 team.csv 的成員之外，額外列出的身分（不負責任務，不出現在成員篩選）
-EXTRA_IDENTITIES = ["指導老師"]
+EXTRA_IDENTITIES = ["黃秋杰老師"]
 FIELDS = ["id", "phase", "group", "owner", "task", "start", "end", "depends", "status", "deliverable"]
 STATUSES = {"done", "doing", "todo", "optional"}
 

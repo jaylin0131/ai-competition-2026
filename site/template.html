@@ -526,9 +526,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     const extras = D.extraIdentities || [];
     const names = members.concat(extras);
     const opt = cur => n => `<option value="${esc(n)}"${n === cur ? " selected" : ""}>${esc(n)}</option>`;
-    const options = cur => '<option value="">請選擇…</option>'
-      + `<optgroup label="成員">${members.map(opt(cur)).join("")}</optgroup>`
-      + (extras.length ? `<optgroup label="其他">${extras.map(opt(cur)).join("")}</optgroup>` : "");
+    const options = cur => '<option value="">請選擇…</option>' + names.map(opt(cur)).join("");
     B.needIdentity = true;
     B.me = names.includes(store.get("identity", "")) ? store.get("identity", "") : "";
 
