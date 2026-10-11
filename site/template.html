@@ -292,7 +292,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
   const hash = (location.hash || "").slice(1);
   const state = {
     p: ["all", "jnc", "qkd"].includes(hash) ? hash : store.get("p", "all"),
-    person: store.get("person", ""),
+    person: "",  // 每次進入都從「全部成員」開始
     hideDone: store.get("hideDone", false),
     open: null
   };
@@ -473,7 +473,7 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     document.getElementById("charts").innerHTML = "";
     render();
   }));
-  sel.addEventListener("change", () => { state.person = sel.value; store.set("person", state.person); render(); });
+  sel.addEventListener("change", () => { state.person = sel.value; render(); });
   hd.addEventListener("change", () => { state.hideDone = hd.checked; store.set("hideDone", state.hideDone); render(); });
   document.addEventListener("change", e => { if (e.target.classList && e.target.classList.contains("chk")) toggleDone(e.target.dataset.k, e.target.checked); });
   const charts = document.getElementById("charts");
@@ -531,11 +531,8 @@ footer { color: var(--muted); font-size: 13px; display: flex; flex-direction: co
     B.me = names.includes(store.get("identity", "")) ? store.get("identity", "") : "";
 
     const setIdentity = name => {
-      const first = !B.me;
       B.me = name;
       store.set("identity", name);
-      // 第一次選身分時，順便把成員篩選設成自己
-      if (first && members.includes(name) && !state.person) { state.person = name; sel.value = name; store.set("person", name); }
       showBar(); render();
     };
     const showBar = () => {
