@@ -55,7 +55,7 @@ Cloudflare 現在預設走 **Workers** 建立流程（畫面標題「設定您�
 | 組建命令 | `python3 site/build_site.py --mode supabase --out site/dist/index.html` |
 | 部署命令 | `npx wrangler deploy`（預設值） |
 | 預覽指令 | `npx wrangler preview`（預設值） |
-| 啟用預覽建置 | 可開可關；預覽網址同樣受團隊密碼保護 |
+| 啟用預覽建置 | 建議關閉：預覽網址也能勾選，會寫進同一個資料庫 |
 
    按 **部署**。部署完成後網站就能瀏覽，但要設好下面的變數才能勾選。
 
