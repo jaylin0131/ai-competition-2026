@@ -3,9 +3,9 @@ T01,P0 準備,C,,整理比賽規則與題目評估,2026-10-08,2026-10-08,,done,d
 T02,P0 準備,C,,撰寫專案計畫書,2026-10-08,2026-10-08,T01,done,docs/project-plan.md
 T03,P0 準備,C,,建立專案資料夾與甘特圖,2026-10-11,2026-10-11,T02,done,schedule/gantt.html
 T04,P0 準備,全員,全員,名冊與組別確認,2026-10-11,2026-10-12,T02,done,docs/decisions-pending.md
-T07,P0 準備,A+B,許程景、王端宏,確認 CSV v1 固定欄位、五類標籤與分階段交付（10/18 三類、10/25 五類；真值不進模型）,2026-10-12,2026-10-15,T02,todo,docs/csv-format.md；A/B 確認 10/18 basic 三類、10/25 diagnostic 五類，真值不進模型
+T07,P0 準備,A+B,許程景、王端宏,確認 CSV v1 固定欄位、五類標籤與分階段交付（10/18 三類、10/25 五類；真值不進模型）,2026-10-12,2026-10-15,T02,doing,docs/csv-format.md；A/B 確認 10/18 basic 三類、10/25 diagnostic 五類，真值不進模型
 T08,P0 準備,A,許程景、林子桀、周冠辰,取得並研讀老師的三支模擬程式,2026-10-12,2026-10-14,T04,todo,sim/reference/
-T09,P0 準備,全員,全員,安裝開發環境（requirements.txt）,2026-10-13,2026-10-14,T04,todo,每人可執行 python -m pytest
+T09,P0 準備,全員,全員,安裝開發環境（requirements.txt）,2026-10-13,2026-10-14,T04,done,每人可執行 python -m pytest
 M1,P0 準備,A+B,許程景、王端宏、何名綸,里程碑：A/B 確認 CSV v1 固定欄位、五類標籤與分階段交付,2026-10-15,2026-10-15,T07;T04,todo,docs/csv-format.md；B 組確認 10/18 basic 三類、10/25 diagnostic 五類，真值不進模型
 T10,P0 準備,A,林子桀、許程景、周冠辰,A 組支援任務認領與時間確認,2026-10-12,2026-10-15,,todo,林子桀、周冠辰回覆可投入時間並認領物理測試或文件審查；確認後再更新相關 A 組任務負責人
 A1,P1 階段一,A,許程景,basic：理想單光子 BB84、簡化去極化、完整攔截重送與三類 CSV v1,2026-10-13,2026-10-18,,todo,src/a_group/generate_bb84_dataset.py；tests/test_csv_v1.py；data/qkd_dataset.csv（basic）；固定種子測試：理想 QBER=0、基底匹配約 50%、完整攔截 QBER 約 25%
