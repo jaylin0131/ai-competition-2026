@@ -13,6 +13,7 @@ AIoT 預測維護與異常診斷（2026 全國 AI 專題創意競賽・企業命
 - [團隊分工](docs/team.md)
 - [系統架構與模組介面](docs/architecture.md)
 - [資料字典](docs/data-dictionary.md)（自動產生）
+- [成效驗證報告](backtest/report.md)（自動產生）
 - [待決定與待確認事項](docs/decisions-pending.md)
 - [AI 分析與 6 人分工規劃 v2](docs/銘祥科技命題_AI分析與6人分工規劃_v2.pdf)（目前版本；人力與時程以 decisions-pending D1 與 tasks.csv 為準）｜[v1 舊版](docs/舊版/銘祥科技命題_6人分工規劃_v1.pdf)（含硬體，已取代）
 
@@ -42,7 +43,25 @@ JNC-AIoT/
 ## 常用指令（在本資料夾執行）
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+```
+
+平台（回放 demo）：
+
+```bash
+.venv/bin/streamlit run app/streamlit_app.py
+```
+
+成效驗證報告（產生 backtest/report.md 與 decide/params.json）：
+
+```bash
+.venv/bin/python scripts/run_backtest.py
+```
+
+測試：
+
+```bash
+.venv/bin/python -m pytest tests -q
 ```
 
 ```bash

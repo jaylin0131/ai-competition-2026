@@ -1,2 +1,5 @@
 # tests/
-各模組的單元測試，例如 load_jnc 讀得到 7 個場域、物理規則抓得到 DO 負值。
+```bash
+.venv/bin/python -m pytest tests -q
+```
+需要 `data/processed/pond.csv`（先執行 `scripts/prepare_data.py`）。

@@ -59,18 +59,33 @@ flowchart LR
 | 呈現層 | Streamlit：燈號、診斷卡、預測曲線、決策卡、工單、回測頁 | `app/` | P2 |
 | 驗證層 | 照 AI 建議做 vs 不做／固定門檻，比較低溶氧時數、能耗、誤報 | `backtest/` | P6、P5 |
 
-## 4. 模組介面（草案，M1 前定稿）
+## 4. 模組介面（魚塭第一版已實作，2026-10-20）
 
-每個模組是一個 Python 函式，輸入一段時間的 DataFrame（index 為時間），輸出 dict（可轉 JSON）。
+每個模組是一個 Python 函式，輸入一段時間的 DataFrame（index 為時間、已用 `common.clean.clean()` 清洗），輸出 dict（可轉 JSON）。
+草案的欄位都保留，第一版多了幾個欄位（下方粗體）；之後擴充場域也照這個格式。
 
 ```python
-state(df, site) -> {"ts", "site", "wqi", "light", "sensor_trust": {欄位: 0–100}}
-diagnose(df, site) -> [{"ts", "type", "target", "evidence": [...], "confidence"}]
-forecast(df, site) -> {"ts", "target", "h1", "h3", "h6", "hours_to_threshold", "fail_prob"}
-decide(state, diagnoses, forecast) -> [標準決策資料]
+state(df, site) -> {"ts", "site", "wqi", "light", "sensor_trust": {欄位: 0–100},
+                    **"light_text", "values": {DO, pH, ORP, SC, temp}, "probes_used", "aerator_on", "power_w",
+                    "device_health", "offline"**}
+diagnose(df, site) -> [{"ts", "type", "target", "evidence": [...], "confidence", **"cause", "duration_h"**}]
+forecast(df, site, model) -> {"ts", "target", "h1", "h3", "h6", "hours_to_threshold", "fail_prob",
+                              **"now", "path", "p_low", "threshold", "fail_target", "probe_rul"**}
+decide(state, diagnoses, forecast) -> [標準決策資料 9 欄 + **類別、執行模式、優先級、能耗_kWh、編號**]
 ```
 
-`diagnose` 的 `type`：`sensor_fault`、`sensor_drift`、`water_event`、`equipment_fault`、`offline`、`power_low`。
+`diagnose` 的 `type`：`sensor_fault`、`sensor_drift`、`water_event`、`equipment_fault`、`offline`、`power_low`（河川用），第一版另有 `multivariate`（Isolation Forest）。
+`forecast` 的 `fail_prob` 是「探頭在 48 小時內超出容許差的機率」（取最高的一支，`fail_target` 為哪一支）；DO 低於門檻的機率是 `p_low`。
+
+整條閉環在 `common/pipeline.py`（`PondPipeline.build().step(ts)`），流程圖 5 個階段對應：
+
+| 企業流程圖 | 程式 |
+|---|---|
+| 01 IoT 感測 | `common/replay.py`（回放器、合成故障注入） |
+| 02 大數據 | `common/clean.py`、`common/baseline.py` |
+| 03 AI 分析 | `state/pond.py`、`diagnose/pond.py`、`forecast/pond.py` |
+| 04 決策引擎 | `decide/engine.py`、`decide/workorder.py` |
+| 05 執行回饋 | `backtest/closed_loop.py`（模擬 SCADA／PLC、再學習 α、β）、`app/streamlit_app.py` 的人工確認與執行紀錄 |
 
 標準決策資料範例：
 
