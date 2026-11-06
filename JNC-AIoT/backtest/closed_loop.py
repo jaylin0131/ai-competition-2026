@@ -102,11 +102,11 @@ def compare(f, pred, models, effect, decay, alpha=C.RISK_ALPHA, beta=C.SAVE_BETA
     return pd.DataFrame(rows).T, logs
 
 
-LOSS_PER_LOW_HOUR = 100.0   # 每 1 小時低溶氧的損失估計（元），用於再學習的成本函數
+LOSS_PER_LOW_HOUR = C.LOSS_PER_LOW_HOUR   # 成本設定與營運風險共用（common/config.py）
 
 
 def cost(m: dict) -> float:
-    return m["低溶氧時數（DO<3）"] * LOSS_PER_LOW_HOUR + m["危急時數（DO<2.5）"] * 3 * LOSS_PER_LOW_HOUR + m["電費（元）"]
+    return m["低溶氧時數（DO<3）"] * LOSS_PER_LOW_HOUR + m["危急時數（DO<2.5）"] * C.LOSS_PER_CRIT_HOUR + m["電費（元）"]
 
 
 def tune(f, pred, models, effect, decay, tune_period, valid_period,

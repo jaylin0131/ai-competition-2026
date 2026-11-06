@@ -147,6 +147,15 @@ def decide(state: dict, diagnoses: list[dict], forecast: dict, params: dict | No
                           Fallback="檢修期間啟動備用增氧機", 類別="管理優先", 執行模式="人工確認",
                           優先級=2, 派工="維修技師", 備品="葉輪、馬達軸承", 能耗_kWh=0.0))
 
+    # E2. 增氧機預防性檢修：功率趨勢預測 48 小時內低負載機率高（I3）
+    aer = forecast.get("aerator") or {}
+    if (aer.get("fail_prob") or 0) >= C.AERATOR_FAIL_ALERT and not any(r["設備"] == "增氧機" and r["類別"] == "管理優先" for r in out):
+        out.append(_d(設備="增氧機", 動作="預防性檢修", 時間="48 小時內", 幅度="—",
+                      理由=f"{aer['evidence']}（48 小時內故障機率 {aer['fail_prob']:.0%}）",
+                      預期效果="在低負載停擺前完成檢修", 風險="中",
+                      Fallback="檢修期間啟動備用增氧機", 類別="管理優先", 執行模式="人工確認",
+                      優先級=2, 派工="維修技師", 備品="葉輪、馬達軸承", 能耗_kWh=0.0))
+
     # F. 感測器維護（診斷）＋ G. 預防性維護（剩餘可用時間）
     seen = set()
     for d in diagnoses:
@@ -195,6 +204,12 @@ def three_questions(state: dict, diagnoses: list[dict], forecast: dict, decision
            else "資料不足，無法預測")
     if forecast.get("hours_to_threshold"):
         nxt += f"，預計 {forecast['hours_to_threshold']} 小時後超標"
+    if forecast.get("aerator_fail_prob") is not None:
+        nxt += f"；增氧機 48 小時內故障機率 {forecast['aerator_fail_prob']:.0%}"
+    if forecast.get("ops_risk"):
+        r = forecast["ops_risk"]
+        nxt += (f"；營運風險{r['level']}（6 小時預期損失約 {r['expected_loss']} 元）" if r["expected_loss"] is not None
+                else f"；營運風險{r['level']}（{r['note']}）")
     top = decisions[0] if decisions else None
     act = f"{top['設備']}：{top['動作']}（{top['執行模式']}）" if top else "維持現狀"
     return {"現在發生什麼？": now, "接下來會怎樣？": nxt, "現在該做什麼？": act}

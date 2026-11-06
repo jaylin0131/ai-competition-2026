@@ -117,6 +117,12 @@ def assess(df: pd.DataFrame) -> pd.DataFrame:
     probe_cols = [c for cols in C.PROBES.values() for c in cols]
     f["device_health"] = trust[probe_cols].mean(axis=1)
     f["offline"] = df["offline"] if "offline" in df else df.isna().all(axis=1)
+    # 環境（OA4 氣象站）：氣象站凍結或讀到 0 時當缺值，不讓壞資料進入預測與決策（I6）
+    ok_w = (trust[C.WEATHER].min(axis=1) >= 50) if set(C.WEATHER) <= set(trust) else False
+    for col, name in [("OA4 溫度", "air_temp"), ("OA4 濕度", "humidity"), ("OA4 大氣壓力", "pressure"),
+                      ("OA4 熱指數", "heat_index")]:
+        v = df[col] if col in df else pd.Series(np.nan, index=df.index)
+        f[name] = v.where(ok_w & (v > 0))
     return f
 
 
@@ -131,6 +137,8 @@ def state(df: pd.DataFrame, site: str = "pond", frame: pd.DataFrame | None = Non
         "ts": f.index[-1].isoformat(), "site": site,
         "wqi": val("wqi", 0), "light": r["light"], "light_text": LIGHTS[r["light"]],
         "values": {q: val(q) for q in ["DO", "pH", "ORP", "SC", "temp"]},
+        "environment": {"氣溫": val("air_temp", 1), "濕度": val("humidity", 0), "氣壓": val("pressure", 1),
+                        "熱指數": val("heat_index", 1)},
         "probes_used": {q: int(r[f"{q}_n"]) for q in C.PROBES},
         "aerator_on": None if pd.isna(r["aerator_on"]) else bool(r["aerator_on"]),
         "power_w": val("power", 0),

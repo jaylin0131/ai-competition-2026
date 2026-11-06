@@ -137,3 +137,31 @@ def test_fault_injection_demo():
     assert any(d["設備"] == "DO2 探頭" for d in out["decisions"])
     # 原本的管線不受影響
     assert pipe.step(ts)["state"]["probes_used"]["DO"] == 3
+
+
+def test_forecast_outputs_equipment_and_ops_risk():
+    """I3、I4、I6：預測輸出增氧機故障機率、營運風險；狀態輸出環境資料。"""
+    from common.pipeline import PondPipeline
+    out = PondPipeline.build().step("2026-07-19 18:00")
+    fc = out["forecast"]
+    assert 0 <= fc["aerator_fail_prob"] <= 1
+    assert fc["ops_risk"]["level"] in ("低", "中", "高") and fc["ops_risk"]["expected_loss"] >= 0
+    assert out["state"]["environment"]["氣溫"] is not None
+    assert "營運風險" in out["answers"]["接下來會怎樣？"]
+    # 氣象站凍結期間環境值要當缺值
+    assert out is not None and PondPipeline.build().step("2026-09-20 06:00")["state"]["environment"]["氣溫"] is None
+
+
+def test_aerator_degradation_triggers_maintenance():
+    """合成功率衰退時，增氧機故障機率升高並排預防性檢修。"""
+    import numpy as np
+    from forecast.pond import aerator_health
+    from decide.engine import decide
+    idx = pd.date_range("2026-07-01", periods=200, freq="h")
+    f = pd.DataFrame({"power": np.r_[np.full(176, 760.0), np.linspace(760, 690, 24)], "aerator_on": True}, index=idx)
+    aer = aerator_health(f)
+    assert aer["fail_prob"] >= C.AERATOR_FAIL_ALERT
+    params = {"alpha": 0.3, "beta": 0.05, "validated": True, "aerator_effect": 0.13, "effect_decay": 0.73}
+    fc = {**_fc(0.0, None, 4.0), "aerator": aer, "aerator_fail_prob": aer["fail_prob"]}
+    d = decide(_state(4.0, True), [], fc, params)
+    assert any(r["設備"] == "增氧機" and r["動作"] == "預防性檢修" for r in d)

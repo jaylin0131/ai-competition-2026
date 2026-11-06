@@ -55,3 +55,11 @@ PEAK_HOURS = range(9, 21)    # 尖峰時段（簡化）
 RISK_ALPHA = 0.30            # P(DO < DO_LOW, 6 h 內) 超過 α 即建議增氧；由 backtest 調整
 SAVE_BETA = 0.05             # 風險低於 β 且 DO 充足才建議節能停機
 PARAMS_FILE = "decide/params.json"  # backtest 調整後的 α、β 寫在這裡
+
+# ---- 營運風險（預期損失，元）：估計值，待企業確認；回測的成本函數也用這組 ----
+LOSS_PER_LOW_HOUR = 100.0      # 每 1 小時低溶氧（DO < 3）的損失
+LOSS_PER_CRIT_HOUR = 300.0     # 每 1 小時危急（DO < 2.5）的損失
+AERATOR_FAILURE_COST = 3000.0  # 增氧機故障（檢修＋停機期間風險）
+OPS_RISK_MID = 150.0           # 6 小時預期損失 ≥ 此值為「中」
+OPS_RISK_HIGH = 500.0          # ≥ 此值為「高」
+AERATOR_FAIL_ALERT = 0.5       # 增氧機 48 小時內故障機率 ≥ 此值就排預防性檢修

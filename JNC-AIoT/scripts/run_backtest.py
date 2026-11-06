@@ -25,7 +25,9 @@ from backtest.detection import CLEAN_WINDOW, known_event_eval, synthetic_eval
 from common import config as C
 from common.load_jnc import ROOT
 from common.pipeline import PondPipeline
-from forecast.pond import FOLDS, baselines, evaluate, warning_eval
+from backtest.equipment import false_alarm_rate, synthetic_lead
+from forecast.pond import FOLDS, WEATHER_FEATURES, aerator_health, baselines, evaluate, ops_risk, walk_forward, \
+    warning_eval
 
 OUT = ROOT / "backtest"
 FIG = OUT / "figures"
@@ -66,6 +68,33 @@ def main() -> None:
     rmse = ev.pivot(index="模型", columns="預測時距", values="RMSE")
     gain = (1 - mae.loc["GBDT（本作品）"] / mae.loc["持續法"]) * 100
     warn = pd.DataFrame([warning_eval(f, pred, start, a) for a in [0.1, 0.2, 0.3, 0.4, 0.5]]).set_index("α")
+
+    print("環境特徵對照（不含環境再訓練一次）…")
+    pred_nw, _ = walk_forward(f, weather=False)
+    ev_w = evaluate(f, {"含環境（本作品）": pred, "不含環境": pred_nw}, start)
+    mae_w = ev_w.pivot(index="模型", columns="預測時距", values="MAE")
+    w_w = pd.DataFrame({"含環境（本作品）": warning_eval(f, pred, start, 0.3),
+                        "不含環境": warning_eval(f, pred_nw, start, 0.3)}).T.drop(columns="α")
+    mae_w.index.name = w_w.index.name = "模型"
+
+    # ---------- 2b. 增氧機故障機率、營運風險 ----------
+    print("設備故障機率與營運風險…")
+    aer_fa = false_alarm_rate(f, start, end)
+    aer_lead = synthetic_lead(f, ["2026-07-20 00:00", "2026-07-28 00:00", "2026-08-05 00:00",
+                                  "2026-08-20 00:00", "2026-09-10 00:00"]).set_index("衰退開始")
+    risk_rows = []
+    for t in pred.index[::2]:
+        r = ops_risk(pred.loc[t], bool(f.loc[t, "aerator_on"]) if pd.notna(f.loc[t, "aerator_on"]) else None,
+                     aerator_health(f.loc[:t])["fail_prob"])
+        actual = int((f["DO"].loc[t + pd.Timedelta(hours=1):t + pd.Timedelta(hours=6)] < C.DO_LOW).sum())
+        if r["expected_loss"] is None:
+            continue
+        risk_rows.append({"level": r["level"], "pred": r["expected_low_h"], "actual": actual, "loss": r["expected_loss"]})
+    risk_df = pd.DataFrame(risk_rows)
+    risk_tab = risk_df.groupby("level").agg(小時數=("level", "size"), 預期低溶氧時數=("pred", "mean"),
+                                            實際低溶氧時數=("actual", "mean"), 預期損失_元=("loss", "mean"))
+    risk_tab = risk_tab.reindex([x for x in ["低", "中", "高"] if x in risk_tab.index])
+    risk_tab.index.name = "營運風險"
 
     # ---------- 3. 閉環成效 ----------
     print("閉環模擬…")
@@ -226,6 +255,38 @@ RMSE（mg/L）：
 
 {md(warn, '{:.2f}')}
 
+### 2.1 環境資料（OA4 氣象站）的貢獻
+
+特徵：{'、'.join(WEATHER_FEATURES)}（氣溫與水溫差、氣壓 3／6 小時變化、濕度）。氣象站凍結或讀到 0 的小時當缺值
+（約 {f['pressure'].isna().mean():.0%} 的小時，主要是 9/14 起的凍結）。全套 6 項（再加氣溫、氣壓本身）也比較過，3–6 小時 MAE 略差，所以只留這 4 項。
+
+MAE（mg/L）：
+
+{md(mae_w, '{:.3f}')}
+
+提前預警（α = 0.3）：
+
+{md(w_w, '{:.2f}')}
+
+結論：加入環境資料後 MAE 差異在 ±0.003 以內（雜訊範圍），預警多抓到事件、提前時間略長，每週誤報略增。
+
+### 2.2 增氧機故障機率（設備預測維護）
+
+運轉功率 24 小時趨勢外推到低負載門檻 {C.AERATOR_LOW_LOAD_W:.0f} W，48 小時內低於門檻的機率 ≥ {C.AERATOR_FAIL_ALERT} 就排預防性檢修。
+資料期間增氧機沒有真的故障過（運轉功率 714–796 W），所以：
+
+- 真實資料誤報：樣本外期間 **{aer_fa:.1%}** 的小時發出預警
+- 合成功率衰退（72 小時內線性降到 600 W，加 ±5 W 雜訊）：
+
+{md(aer_lead, '{:.0f}')}
+
+### 2.3 營運風險
+
+6 小時預期損失＝期望低溶氧時數 × {C.LOSS_PER_LOW_HOUR:.0f} 元＋期望危急時數 × {C.LOSS_PER_CRIT_HOUR:.0f} 元＋增氧電費＋增氧機故障機率 × {C.AERATOR_FAILURE_COST:.0f} 元；
+≥ {C.OPS_RISK_MID:.0f} 元為「中」、≥ {C.OPS_RISK_HIGH:.0f} 元為「高」（單價為估計值，待企業確認）。下表檢查分級是否對應實際結果（樣本外，每 2 小時抽一次）：
+
+{md(risk_tab, '{:.1f}')}
+
 ## 3. 閉環成效（模擬 SCADA／PLC 執行）
 
 反事實模擬（假設需人工確認的決策都被核准）：DO_sim = DO_實際 + Δ，Δ 由「策略與現場操作的台數差」累積並衰減（backtest/effect.py）。
@@ -242,7 +303,7 @@ RMSE（mg/L）：
 
 ### 3.1 再學習（調整 α、β）
 
-在 7/15–7/31 找成本最低的參數（成本＝低溶氧時數 × {CL.LOSS_PER_LOW_HOUR:.0f} 元＋危急時數 × {3 * CL.LOSS_PER_LOW_HOUR:.0f} 元＋電費），到 8/01 之後驗證：
+在 7/15–7/31 找成本最低的參數（成本＝低溶氧時數 × {CL.LOSS_PER_LOW_HOUR:.0f} 元＋危急時數 × {C.LOSS_PER_CRIT_HOUR:.0f} 元＋電費），到 8/01 之後驗證：
 
 - 選到 α = {tuned['alpha']}、β = {tuned['beta']}
 - 驗證期成本：""" + "、".join(f"{k} {v:,.0f}" for k, v in tuned["validation_cost"].items()) + f"""

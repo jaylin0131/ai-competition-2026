@@ -178,6 +178,11 @@ with tab[1]:
     v = s["values"]
     st.dataframe(pd.DataFrame([{"pH": v["pH"], "ORP（mV）": v["ORP"], "SC": v["SC"], "水溫（°C）": v["temp"],
                                 "設備健康度": s["device_health"]}]), hide_index=True)
+    env = s.get("environment") or {}
+    st.markdown("#### 環境（OA4 氣象站）")
+    st.dataframe(pd.DataFrame([{"氣溫（°C）": env.get("氣溫"), "濕度（%）": env.get("濕度"),
+                                "氣壓（hPa）": env.get("氣壓"), "熱指數": env.get("熱指數")}]), hide_index=True)
+    st.caption("氣象站凍結或讀到 0 時顯示空白，也不會進入預測（9/14 起氣象站凍結）。氣溫與水溫差、氣壓變化、濕度是溶氧預測的特徵。")
     st.markdown("#### 感測器可信度（0–100）")
     tr = pd.Series(s["sensor_trust"]).dropna()
     fig = go.Figure(go.Bar(x=tr.values, y=[k.replace(" 即時值", "") for k in tr.index], orientation="h",
@@ -205,6 +210,19 @@ with tab[3]:
     worst = fc.get("fail_target")
     c.metric("探頭故障機率（最高）", f"{fc['fail_prob']:.0%}" if fc.get("fail_prob") is not None else "—",
              worst.replace(" 即時值", "") if worst else None, delta_color="off")
+    aer, risk = fc.get("aerator") or {}, fc.get("ops_risk") or {}
+    d1, d2, d3 = st.columns(3)
+    d1.metric("增氧機 48 h 內故障機率", f"{aer['fail_prob']:.0%}" if aer.get("fail_prob") is not None else "—",
+              f"{aer['slope_w_per_day']:+.1f} W／天" if aer.get("slope_w_per_day") is not None else None,
+              delta_color="off")
+    has_loss = bool(risk) and risk.get("expected_loss") is not None
+    d2.metric("營運風險（6 h）", risk.get("level", "—"),
+              f"預期損失約 {risk['expected_loss']} 元" if has_loss else risk.get("note"), delta_color="off")
+    d3.metric("期望低溶氧／危急時數（6 h）",
+              f"{risk['expected_low_h']}／{risk['expected_crit_h']} h" if has_loss else "—")
+    if aer.get("evidence"):
+        st.caption("增氧機：" + aer["evidence"] + "。營運風險＝" + "＋".join(f"{k} {v} 元" for k, v in risk.get("breakdown", {}).items())
+                   + "（單價為估計值，見 common/config.py）")
     hist = view.frame["DO"].loc[ts - pd.Timedelta(hours=48):ts]
     fut_t = [ts + pd.Timedelta(hours=h) for h in range(0, 7)]
     fut = [fc["now"]] + fc["path"]
