@@ -99,6 +99,8 @@ def test_number_guard():
     src = "DO = 2.61 mg/L，持續 3 小時"
     assert number_guard("溶氧 2.61，請開機 3 小時", src)
     assert not number_guard("溶氧 2.4，請開機 3 小時", src)
+    # 寫法不同但數值相同要放行
+    assert number_guard("偏離 2.07，容許 1", "相差 -2.07（容許 ±1.0）")
 
 
 def test_no_auto_execution_unless_low_risk(frame, df):

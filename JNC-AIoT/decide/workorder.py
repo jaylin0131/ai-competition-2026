@@ -46,17 +46,28 @@ def render(d: dict) -> str:
     return polished if number_guard(polished, text) else text
 
 
+def _values(text: str) -> set[float]:
+    return {abs(float(n)) for n in NUM.findall(text)}
+
+
 def number_guard(output: str, source: str) -> bool:
-    """LLM 輸出的數字都必須出現在來源文字中。"""
-    allowed = set(NUM.findall(source))
-    return all(n in allowed for n in NUM.findall(output))
+    """LLM 輸出的數字都必須出現在來源文字中（比數值，不比寫法：-2.07 與 2.07、1.0 與 1 視為相同）。"""
+    return _values(output) <= _values(source)
+
+
+PROMPT = ("把下面的養殖場決策改寫成給現場人員看的一段繁體中文工單說明，"
+          "不要新增任何數字，不要改變動作與時間：\n")
+
+
+def ollama_generate(model: str, text: str, timeout: float | None = None) -> dict:
+    """呼叫本機 Ollama。回傳 Ollama 的完整回應（response、eval_count、eval_duration 等，測速用）。"""
+    timeout = timeout or float(os.environ.get("JNC_LLM_TIMEOUT", "180"))
+    body = {"model": model, "prompt": PROMPT + text, "stream": False, "options": {"temperature": 0.2}}
+    req = urllib.request.Request("http://localhost:11434/api/generate", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
 
 
 def _ollama(model: str, text: str) -> str:
-    prompt = ("把下面的養殖場決策改寫成給現場人員看的一段繁體中文工單說明，"
-              "不要新增任何數字，不要改變動作與時間：\n" + text)
-    req = urllib.request.Request("http://localhost:11434/api/generate",
-                                 data=json.dumps({"model": model, "prompt": prompt, "stream": False}).encode(),
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read())["response"].strip()
+    return ollama_generate(model, text)["response"].strip()
