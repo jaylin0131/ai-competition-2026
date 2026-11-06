@@ -228,7 +228,7 @@ RMSE（mg/L）：
 
 ## 3. 閉環成效（模擬 SCADA／PLC 執行）
 
-反事實模擬：DO_sim = DO_實際 + Δ，Δ 由「策略與現場操作的台數差」累積並衰減（backtest/effect.py）。
+反事實模擬（假設需人工確認的決策都被核准）：DO_sim = DO_實際 + Δ，Δ 由「策略與現場操作的台數差」累積並衰減（backtest/effect.py）。
 增氧機效果有兩組：
 
 - **工程估計**：{eng['aerator_effect']} mg/L/h、衰減 {eng['effect_decay']}（{eng['source']}）
@@ -246,7 +246,7 @@ RMSE（mg/L）：
 
 - 選到 α = {tuned['alpha']}、β = {tuned['beta']}
 - 驗證期成本：""" + "、".join(f"{k} {v:,.0f}" for k, v in tuned["validation_cost"].items()) + f"""
-- 是否優於所有基準：**{'是 → decide/params.json 設為 validated，預測性增氧改為自動執行' if tuned['validated'] else '否 → 預測性增氧維持人工確認'}**
+- 是否優於所有基準：**{'是 → decide/params.json 設為 validated：DO 已低於門檻的增氧（風險低）自動執行；只是預測會低（風險中）仍需人工確認' if tuned['validated'] else '否 → 增氧決策一律人工確認'}**
 
 ## 4. 狀態辨識
 

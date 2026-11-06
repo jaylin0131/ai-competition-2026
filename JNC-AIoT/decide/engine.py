@@ -3,10 +3,11 @@
 標準決策資料：設備、動作、時間、幅度、理由、預期效果、風險、人工確認、Fallback
 另附：類別（行動控制／管理優先）、執行模式（自動執行／人工確認／Fallback）、優先級（P1 最高）、能耗_kWh
 
-執行模式分級（企業安全控制原則）：
-- 低風險且已驗證 → 自動執行（例：DO 偏低時啟動增氧機，方向安全）
-- 高風險（停機節能、備用設備、換水、派工）→ 人工確認
+執行模式分級（企業安全控制原則），由 _d() 統一把關：
+- 風險「低」且已驗證 → 自動執行（例：DO 已低於門檻時啟動增氧機，方向安全）
+- 風險「中」「高」→ 一律人工確認（預測性增氧在 DO 仍 ≥ 3.0 時屬「中」，也要人工確認）
 - 系統失效（斷線、DO 探頭全部不可信）→ Fallback 安全規則，由 PLC 保留安全連鎖
+任何規則若把非「低」風險標成自動執行，_d() 會自動降為人工確認。
 
 判斷由規則與模型決定；工單文字見 decide/workorder.py（LLM 只負責寫成白話，數字必須來自這裡）。
 """
@@ -38,8 +39,18 @@ def _d(**kw) -> dict:
     order = ["設備", "動作", "時間", "幅度", "理由", "預期效果", "風險", "人工確認", "Fallback"]
     rec = {k: kw.pop(k, None) for k in order}
     rec.update(kw)
+    if rec["執行模式"] == "自動執行" and rec["風險"] != "低":
+        rec["執行模式"] = "人工確認"   # 安全控制原則：只有低風險可自動執行
     rec["人工確認"] = rec["執行模式"] == "人工確認"
     return rec
+
+
+def _finalize(out: list[dict], state: dict) -> list[dict]:
+    """依優先級排序並補上編號；每個 return 都要經過這裡（工單要用編號）。"""
+    out = sorted(out, key=lambda r: r["優先級"])
+    for i, r in enumerate(out):
+        r["編號"] = f"{state['ts'][:13].replace('-', '').replace('T', '-')}-{i + 1:02d}"
+    return out
 
 
 def _quantity(target: str) -> str:
@@ -73,7 +84,7 @@ def decide(state: dict, diagnoses: list[dict], forecast: dict, params: dict | No
         out.append(_d(設備="感測主機", 動作="檢查通訊與電源", 時間="1 小時內", 幅度="—",
                       理由=why, 預期效果="恢復監測", 風險="中", Fallback="恢復前維持 Fallback 規則",
                       類別="管理優先", 執行模式="人工確認", 優先級=1, 派工="值班人員", 備品="—", 能耗_kWh=0.0))
-        return out
+        return _finalize(out, state)
 
     h_thr = forecast.get("hours_to_threshold")
     fc_txt = (f"預測 1／3／6 小時 DO 為 {forecast['h1']}／{forecast['h3']}／{forecast['h6']} mg/L，"
@@ -101,11 +112,13 @@ def decide(state: dict, diagnoses: list[dict], forecast: dict, params: dict | No
     elif p_low > P["alpha"] or (do < C.DO_LOW):
         when = "已低於門檻" if do < C.DO_LOW else (f"預計 {h_thr} 小時後低於門檻" if h_thr else "6 小時內可能低於門檻")
         if not on:
-            mode = "自動執行" if P["validated"] else "人工確認"
+            # DO 已低於門檻＝低風險（方向安全、已發生）；只是預測會低＝中風險，要人工確認
+            risk = "低" if do < C.DO_LOW else "中"
+            mode = "自動執行" if (P["validated"] and risk == "低") else "人工確認"
             out.append(_d(設備="增氧機", 動作="啟動", 時間="立即，持續 3 小時", 幅度="全速",
                           理由=f"{when}；{fc_txt}；{trust_txt}",
                           預期效果=f"3 小時內 DO 約回升 {gain3:.2f} mg/L，避開低溶氧",
-                          風險="中" if do >= C.DO_LOW else "低", Fallback=FALLBACK_AERATOR,
+                          風險=risk, Fallback=FALLBACK_AERATOR,
                           類別="行動控制", 執行模式=mode, 優先級=2, 能耗_kWh=C.AERATOR_RATED_KW * 3))
         else:
             out.append(_d(設備="備用增氧機", 動作="啟動", 時間="立即，持續 3 小時", 幅度="全速",
@@ -165,9 +178,7 @@ def decide(state: dict, diagnoses: list[dict], forecast: dict, params: dict | No
         out.append(_d(設備="增氧機", 動作="維持運轉" if on else "維持停機", 時間="下一小時重新評估", 幅度="—",
                       理由=f"{trust_txt}；{fc_txt}", 預期效果="水質穩定", 風險="低",
                       Fallback=FALLBACK_AERATOR, 類別="行動控制", 執行模式="自動執行", 優先級=4, 能耗_kWh=0.0))
-    for i, r in enumerate(sorted(out, key=lambda r: r["優先級"])):
-        r["編號"] = f"{state['ts'][:13].replace('-', '').replace('T', '-')}-{i + 1:02d}"
-    return sorted(out, key=lambda r: r["優先級"])
+    return _finalize(out, state)
 
 
 def _hour(state: dict) -> int:

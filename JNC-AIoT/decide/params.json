@@ -4,6 +4,6 @@
   "validated": true,
   "aerator_effect": 0.13,
   "effect_decay": 0.73,
-  "updated": "2026-10-20",
+  "updated": "2026-11-06",
   "note": "由 scripts/run_backtest.py 再學習產生"
 }
