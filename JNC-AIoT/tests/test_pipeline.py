@@ -121,3 +121,19 @@ def test_offline_work_orders():
     assert all("編號" in r for r in d)
     wo = work_orders(d)
     assert any(w["執行模式"] == "Fallback" for w in wo)
+
+
+def test_fault_injection_demo():
+    """平台注入故障（I8）：主機斷線要走 Fallback；DO 探頭掉到 0 要被排除並派工。"""
+    from common.pipeline import PondPipeline
+    pipe = PondPipeline.build()
+    ts = "2026-07-19 18:00"
+    out = pipe.with_fault("offline", "ALL", ts, 4).step(ts)
+    assert out["decisions"][0]["執行模式"] == "Fallback"
+    assert all("編號" in w["工單編號"] or w["工單編號"] for w in out["work_orders"])
+    out = pipe.with_fault("dropout", "DO2 即時值", ts, 6).step(ts)
+    assert out["state"]["probes_used"]["DO"] == 2
+    assert out["state"]["sensor_trust"]["DO2 即時值"] == 0
+    assert any(d["設備"] == "DO2 探頭" for d in out["decisions"])
+    # 原本的管線不受影響
+    assert pipe.step(ts)["state"]["probes_used"]["DO"] == 3

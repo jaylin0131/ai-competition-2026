@@ -35,6 +35,35 @@ class Replayer:
             yield ts, self.df.loc[ts - pd.Timedelta(hours=self.window_hours - 1):ts]
 
 
+FAULT_NAMES = {"stuck": "卡值", "drift": "漂移", "spike": "跳點", "dropout": "掉到 0", "offline": "主機斷線"}
+
+
+def apply_fault(df: pd.DataFrame, kind: str, col: str, start, hours: int, sign: int = 1) -> pd.DataFrame:
+    """在 col 從 start 起 hours 小時注入一種故障（平台示範用，結果固定可重現）。offline 不看 col。"""
+    out = df.copy()
+    seg = out.loc[pd.Timestamp(start):pd.Timestamp(start) + pd.Timedelta(hours=hours - 1)].index
+    if len(seg) == 0:
+        return out
+    if kind == "offline":
+        num = out.columns.drop("offline", errors="ignore")
+        out.loc[seg, num] = np.nan
+        if "offline" in out:
+            out.loc[seg, "offline"] = True
+        return out
+    x = out.loc[seg, col].to_numpy(float)
+    scale = float(np.nanstd(out[col])) or 1.0
+    if kind == "stuck":
+        first = x[~np.isnan(x)][0] if (~np.isnan(x)).any() else np.nan
+        out.loc[seg, col] = first
+    elif kind == "drift":
+        out.loc[seg, col] = x + np.linspace(0, -3 * scale, len(seg))
+    elif kind == "spike":
+        out.loc[seg[-1:], col] = x[-1] + 8 * scale * sign
+    elif kind == "dropout":
+        out.loc[seg, col] = 0.0
+    return out
+
+
 def inject_faults(df: pd.DataFrame, cols: list[str], n: int = 12, seed: int = 0,
                   start=None, end=None, min_gap: int = 48) -> tuple[pd.DataFrame, pd.DataFrame]:
     """在 [start, end] 內隨機注入 n 個不重疊的故障。回傳 (注入後資料, labels)。

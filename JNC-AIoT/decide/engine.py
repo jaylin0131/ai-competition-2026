@@ -190,7 +190,7 @@ def three_questions(state: dict, diagnoses: list[dict], forecast: dict, decision
     bad = [d for d in diagnoses if d["confidence"] >= C.ALARM_MIN_CONF and d["type"] != "water_event"]
     now = f"{state['light_text']}，WQI {state['wqi']}，DO {state['values']['DO']} mg/L"
     if bad:
-        now += "；" + "、".join(sorted({d['target'] for d in bad})) + " 異常"
+        now += "；" + "、".join(sorted({"感測主機" if d["target"] == "ALL" else d["target"] for d in bad})) + " 異常"
     nxt = (f"6 小時內 DO 低於 {C.DO_LOW} 的機率 {forecast['p_low']:.0%}" if forecast.get("p_low") is not None
            else "資料不足，無法預測")
     if forecast.get("hours_to_threshold"):

@@ -19,6 +19,7 @@ import streamlit as st
 
 from common import config as C
 from common.pipeline import PondPipeline
+from common.replay import FAULT_NAMES
 
 ROOT = Path(__file__).resolve().parent.parent
 LIGHT_COLOR = {"green": "#1f9d6b", "yellow": "#e0a800", "red": "#d64545", "gray": "#8a8a8a"}
@@ -65,21 +66,45 @@ with st.sidebar:
     c2.button("後 1 h ▶", on_click=_move, args=(1,))
     auto = c3.toggle("播放")
     st.markdown(f"**{idx[ss.i]:%Y/%m/%d %H:00}**")
+    st.divider()
+    st.markdown("### 注入故障（示範）")
+    st.caption("在目前回放時間注入感測器或主機故障，看 AI 如何排除壞探頭、改走 Fallback。")
+    fault_kind = st.selectbox("故障類型", ["（不注入）"] + list(FAULT_NAMES), key="fault_kind",
+                              format_func=lambda k: FAULT_NAMES.get(k, k))
+    probe_cols = [c for cols in C.PROBES.values() for c in cols]
+    fault_col = st.selectbox("探頭", probe_cols, key="fault_col", disabled=fault_kind in ("（不注入）", "offline"),
+                             format_func=lambda c: c.replace(" 即時值", ""))
+    fault_hours = st.slider("到目前為止已持續（小時）", 1, 24, 6, key="fault_hours",
+                            disabled=fault_kind in ("（不注入）", "spike"))
     p = pipe.params
     st.divider()
     st.markdown("### 決策參數（再學習結果）")
     st.caption(f"α＝{p['alpha']}（低溶氧機率超過就增氧）、β＝{p['beta']}（節能門檻）、"
-               f"{'已驗證：預測性增氧自動執行' if p.get('validated') else '未驗證：預測性增氧需人工確認'}")
+               f"{'已驗證：DO 已低於門檻的增氧自動執行，只是預測會低仍需人工確認' if p.get('validated') else '未驗證：增氧決策一律人工確認'}")
 
 ts = idx[ss.i]
-out = pipe.step(ts)
+
+
+@st.cache_resource(max_entries=8, show_spinner="注入故障，重新計算狀態、診斷與預測…")
+def faulted(_pipe: PondPipeline, kind: str, col: str, end: pd.Timestamp, hours: int) -> PondPipeline:
+    return _pipe.with_fault(kind, col, end, hours)
+
+
+if fault_kind == "（不注入）":
+    view = pipe
+else:
+    view = faulted(pipe, fault_kind, fault_col, ts, 1 if fault_kind == "spike" else fault_hours)
+    where = "主機" if fault_kind == "offline" else fault_col.replace(" 即時值", "")
+    st.warning(f"示範模式：已在 {where} 注入「{FAULT_NAMES[fault_kind]}」"
+               f"（{view.fault['start']:%m/%d %H:00}–{ts:%m/%d %H:00}），以下結果都是注入後重新計算的。")
+out = view.step(ts)
 s, fc, decs = out["state"], out["forecast"], out["decisions"]
 
 # ---------------- 標題與閉環 ----------------
 st.markdown("## IoT 大數據 × AI 決策・魚塭守門員")
 cols = st.columns(5)
 stage_txt = [
-    f"{len(pipe.df.columns) - 1} 個欄位<br>主機{'斷線' if s['offline'] else '連線中'}",
+    f"{len(view.df.columns) - 1} 個欄位<br>主機{'斷線' if s['offline'] else '連線中'}",
     f"清洗、歷史基準<br>可用 DO 探頭 {s['probes_used']['DO']}/3",
     f"{s['light_text']}<br>{len([d for d in out['diagnoses'] if d['confidence'] >= C.ALARM_MIN_CONF and d['type'] != 'water_event'])} 項設備異常",
     f"{len(decs)} 筆決策<br>{sum(d['執行模式'] != '自動執行' for d in decs)} 筆待人工／Fallback",
@@ -128,11 +153,11 @@ with tab[0]:
                                "執行模式": d["執行模式"]})
                 st.rerun()
             nine = {k: d[k] for k in ["設備", "動作", "時間", "幅度", "理由", "預期效果", "風險", "人工確認", "Fallback"]}
-            st.dataframe(pd.DataFrame([nine]), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame([nine]), hide_index=True, width="stretch")
     st.markdown("#### 管理優先：工單、派工、備品與能耗")
     if out["work_orders"]:
         wo = pd.DataFrame(out["work_orders"]).drop(columns=["說明"])
-        st.dataframe(wo, hide_index=True, use_container_width=True)
+        st.dataframe(wo, hide_index=True, width="stretch")
         with st.expander("工單說明"):
             for w in out["work_orders"]:
                 st.markdown(f"- **{w['工單編號']}** {w['說明']}")
@@ -158,7 +183,7 @@ with tab[1]:
     fig = go.Figure(go.Bar(x=tr.values, y=[k.replace(" 即時值", "") for k in tr.index], orientation="h",
                            marker_color=["#1f9d6b" if x >= 80 else "#e0a800" if x >= 50 else "#d64545" for x in tr.values]))
     fig.update_layout(height=420, margin=dict(l=10, r=10, t=10, b=10), xaxis_range=[0, 100])
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ---------------- 異常診斷 ----------------
 with tab[2]:
@@ -180,28 +205,28 @@ with tab[3]:
     worst = fc.get("fail_target")
     c.metric("探頭故障機率（最高）", f"{fc['fail_prob']:.0%}" if fc.get("fail_prob") is not None else "—",
              worst.replace(" 即時值", "") if worst else None, delta_color="off")
-    hist = pipe.frame["DO"].loc[ts - pd.Timedelta(hours=48):ts]
+    hist = view.frame["DO"].loc[ts - pd.Timedelta(hours=48):ts]
     fut_t = [ts + pd.Timedelta(hours=h) for h in range(0, 7)]
     fut = [fc["now"]] + fc["path"]
-    actual = pipe.frame["DO"].loc[ts:ts + pd.Timedelta(hours=6)]
+    actual = view.frame["DO"].loc[ts:ts + pd.Timedelta(hours=6)]
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=hist.index, y=hist.values, name="融合 DO（過去 48 h）", line=dict(color="#333")))
     fig.add_trace(go.Scatter(x=fut_t, y=fut, name="AI 預測 1–6 h", line=dict(color="#1f9d6b", dash="dash")))
     fig.add_trace(go.Scatter(x=actual.index, y=actual.values, name="實際（回放答案）",
                              line=dict(color="#bbb", dash="dot")))
     for col in C.PROBES["DO"]:
-        raw = pipe.df[col].loc[ts - pd.Timedelta(hours=48):ts]
+        raw = view.df[col].loc[ts - pd.Timedelta(hours=48):ts]
         fig.add_trace(go.Scatter(x=raw.index, y=raw.values, name=col.replace(" 即時值", "") + " 原始",
                                  line=dict(width=0.8), opacity=0.35, visible="legendonly"))
     fig.add_hline(y=C.DO_LOW, line=dict(color="#d64545", dash="dot"), annotation_text="低溶氧門檻 3.0")
     fig.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="DO（mg/L）",
                       legend=dict(orientation="h"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     rul = pd.DataFrame(fc["probe_rul"]).T
     rul.index = [i.replace(" 即時值", "") for i in rul.index]
     st.markdown("#### 預測維護：探頭剩餘可用時間")
     st.dataframe(rul.rename(columns={"rul_h": "剩餘可用時間（h）", "slope_per_day": "偏離速度（每天）",
-                                     "fail_prob": "48 h 內故障機率"}), use_container_width=True)
+                                     "fail_prob": "48 h 內故障機率"}), width="stretch")
 
 # ---------------- 執行回饋 ----------------
 with tab[4]:
@@ -214,15 +239,15 @@ with tab[4]:
         hist_, sim_ = [], []
         for r in log.itertuples():
             t0 = pd.Timestamp(r.時間)
-            d0 = pipe.frame["DO"].get(t0)
-            d3 = pipe.frame["DO"].get(t0 + pd.Timedelta(hours=3))
+            d0 = view.frame["DO"].get(t0)
+            d3 = view.frame["DO"].get(t0 + pd.Timedelta(hours=3))
             ok = pd.notna(d0) and pd.notna(d3)
             hist_.append(f"{d0:.2f} → {d3:.2f}" if ok else "—")
             boost = gain3 if ("增氧機" in r.設備 and r.動作 == "啟動" and r.結果 != "駁回") else 0.0
             sim_.append(f"{d0:.2f} → {d3 + boost:.2f}" if ok else "—")
         log["DO 3 h 後：歷史實際（當時未採取）"] = hist_
         log["DO 3 h 後：模擬執行後"] = sim_
-        st.dataframe(log, hide_index=True, use_container_width=True)
+        st.dataframe(log, hide_index=True, width="stretch")
         st.caption(f"模擬執行後＝歷史實際＋增氧機效果（{eff} mg/L/h，衰減 {dec_}，見 backtest/effect.py）。")
         if st.button("清除紀錄"):
             ss.log = []
