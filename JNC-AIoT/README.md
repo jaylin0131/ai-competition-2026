@@ -15,6 +15,7 @@ AIoT 預測維護與異常診斷（2026 全國 AI 專題創意競賽・企業命
 - [資料字典](docs/data-dictionary.md)（自動產生）
 - [成效驗證報告](backtest/report.md)（自動產生）
 - [待決定與待確認事項](docs/decisions-pending.md)
+- [企業規格對照檢查（82a4e31）](docs/spec-compliance-82a4e31.md)：I1–I11 待處理問題
 - [AI 分析與 6 人分工規劃 v2](docs/銘祥科技命題_AI分析與6人分工規劃_v2.pdf)（目前版本；人力與時程以 decisions-pending D1 與 tasks.csv 為準）｜[v1 舊版](docs/舊版/銘祥科技命題_6人分工規劃_v1.pdf)（含硬體，已取代）
 
 ## 資料夾

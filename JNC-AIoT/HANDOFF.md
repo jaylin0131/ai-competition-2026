@@ -58,6 +58,7 @@
 | [docs/architecture.md](docs/architecture.md) | 企業規格、分層、模組介面、場域範圍、技術限制 |
 | [docs/progress.md](docs/progress.md) | 進度紀錄與資料初步發現 |
 | [docs/decisions-pending.md](docs/decisions-pending.md) | 待決定事項 D1–D6、待問主辦 Q1–Q7 |
+| [docs/spec-compliance-82a4e31.md](docs/spec-compliance-82a4e31.md) | 魚塭閉環第一版對照企業規格的問題清單 I1–I11（I1 會當掉，先修） |
 | [docs/data-dictionary.md](docs/data-dictionary.md) | 7 個場域的欄位、期間、缺漏、異常值（自動產生） |
 | [backtest/report.md](backtest/report.md) | 成效驗證報告（自動產生）：偵測、預測、閉環的數字與圖 |
 | [schedule/tasks.csv](schedule/tasks.csv) | 所有任務、負責人、日期、相依、狀態（網站規劃每天自動匯出的副本，勿手改；要改請到 https://ai-competition-schedule.jaylego0810.workers.dev/） |
