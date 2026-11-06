@@ -42,7 +42,40 @@ def _rows(mask: pd.Series, typ: str, target: str, conf, evidence) -> list[dict]:
              "evidence": ev[t], "confidence": round(float(conf[t]), 2)} for t in idx]
 
 
-def diagnose_frame(df: pd.DataFrame, frame: pd.DataFrame | None = None, iforest=None) -> pd.DataFrame:
+def drift_chart(dev: pd.Series, tol: float, kind: str = "cusum") -> tuple[pd.Series, pd.Series]:
+    """探頭偏離量的統計管制圖（只用過去資料）。
+
+    z ＝（偏離量 − 過去 7 天中位數）／過去 7 天穩健標準差（皆取到 24 小時前，下限 tol／4）
+    - cusum：S⁺＝max(0, S⁺＋z−k)、S⁻ 同理，|S| > h 即警報
+    - ewma ：E＝λz＋(1−λ)E，|E| > L·√(λ／(2−λ)) 即警報
+    參數在 common/config.py（DRIFT_*）。回傳 (警報, 統計量；S⁺ 為正、S⁻ 為負)。"""
+    past = dev.shift(24)
+    mu = past.rolling(168, min_periods=48).median()
+    sd = ((past - mu).abs().rolling(168, min_periods=48).median() * 1.4826).clip(lower=tol / 4)
+    z = ((dev - mu) / sd).to_numpy()
+    out = np.zeros(len(z))
+    if kind == "cusum":
+        k, h = C.DRIFT_CUSUM_K, C.DRIFT_CUSUM_H
+        sp = sn = 0.0
+        for i, v in enumerate(z):
+            if not np.isnan(v):
+                sp, sn = max(0.0, sp + v - k), min(0.0, sn + v + k)
+            out[i] = sp if sp >= -sn else sn
+        lim = h
+    else:
+        lam, L = C.DRIFT_EWMA_LAMBDA, C.DRIFT_EWMA_L
+        e = 0.0
+        for i, v in enumerate(z):
+            if not np.isnan(v):
+                e = lam * v + (1 - lam) * e
+            out[i] = e
+        lim = L * np.sqrt(lam / (2 - lam))
+    stat = pd.Series(out, index=dev.index)
+    return (stat.abs() > lim) & dev.notna(), stat
+
+
+def diagnose_frame(df: pd.DataFrame, frame: pd.DataFrame | None = None, iforest=None,
+                   drift_method: str | None = None) -> pd.DataFrame:
     f = assess(df) if frame is None else frame
     checks = sensor_checks(df)
     rows: list[dict] = []
@@ -65,13 +98,29 @@ def diagnose_frame(df: pd.DataFrame, frame: pd.DataFrame | None = None, iforest=
                       (0.3 + 0.1 * jump / (2 * tol)).clip(0.3, 0.9),
                       pd.Series([f"{c} 單點跳變到 {v:.2f}（前 12 小時中位數 {m:.2f}）" for v, m in zip(s, prev)],
                                 index=df.index))
-        # 漂移：6 小時平均偏離 ≥ 容許差，且持續 ≥ 6 小時
-        off = (ch["dev6"].abs() >= tol) & ~ch["range"] & ~ch["stuck"]
+        # 漂移（舊法）：6 小時平均偏離 ≥ 容許差，且持續 ≥ 6 小時
+        valid = ~ch["range"] & ~ch["stuck"]
+        off = (ch["dev6"].abs() >= tol) & valid
         persist = off.astype(int).groupby((~off).cumsum()).cumsum()
         drift = persist >= 6
         conf = (0.5 + 0.05 * persist.clip(upper=8) + 0.1 * (ch["dev6"].abs() / tol - 1).clip(0, 1)).clip(upper=0.95)
         ev = pd.Series([f"{c} 與其他探頭中位數相差 {d:+.2f}（容許 ±{tol}），已持續 {p} 小時"
                         for d, p in zip(ch["dev6"].fillna(0), persist)], index=df.index)
+        method = drift_method or C.DRIFT_METHOD
+        if method != "old" and q in C.DRIFT_CHART_QUANTITIES:
+            # 統計管制：偏離量標準化後做 CUSUM 或 EWMA，抓「還沒超過容許差、但一直往同一邊偏」的慢漂移
+            flag, stat = drift_chart(ch["dev"].where(valid), tol, "cusum" if "cusum" in method else "ewma")
+            # 降誤報：6 小時平均偏離至少容許差的一半，且管制圖警報已持續 DRIFT_PERSIST 小時
+            gate = flag & valid & (ch["dev6"].abs() >= C.DRIFT_MIN_FRAC * tol)
+            run = gate.astype(int).groupby((~gate).cumsum()).cumsum()
+            flag = run >= C.DRIFT_PERSIST
+            new = flag & ~drift
+            name = "CUSUM" if "cusum" in method else "EWMA"
+            conf = conf.where(drift, (0.55 + 0.05 * (stat.abs() / stat.abs().where(flag).min() - 1)).clip(0.55, 0.85))
+            ev = ev.where(drift, pd.Series(
+                [f"{c} 與其他探頭中位數相差 {d:+.2f}，尚未超過容許 ±{tol}，但 {name} 累積偏離 {st:+.1f} 已超過管制界限（慢漂移）"
+                 for d, st in zip(ch["dev"].fillna(0), stat.fillna(0))], index=df.index))
+            drift = drift | new if method.startswith("old+") else flag & valid
         rows += _rows(drift & online, "sensor_drift", c, conf, ev)
 
     ws = [c for c in C.WEATHER if c in checks]

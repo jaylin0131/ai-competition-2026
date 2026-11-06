@@ -63,3 +63,14 @@ AERATOR_FAILURE_COST = 3000.0  # 增氧機故障（檢修＋停機期間風險�
 OPS_RISK_MID = 150.0           # 6 小時預期損失 ≥ 此值為「中」
 OPS_RISK_HIGH = 500.0          # ≥ 此值為「高」
 AERATOR_FAIL_ALERT = 0.5       # 增氧機 48 小時內故障機率 ≥ 此值就排預防性檢修
+
+# ---- 漂移偵測（diagnose/pond.py 的 drift_chart） ----
+# old＝6 小時平均偏離 ≥ 容許差持續 6 小時；old+cusum／old+ewma＝舊法再加統計管制抓慢漂移
+DRIFT_METHOD = "old+ewma"   # 比較見 backtest/report.md 1.3
+DRIFT_CUSUM_K = 0.5
+DRIFT_CUSUM_H = 8.0
+DRIFT_EWMA_LAMBDA = 0.1
+DRIFT_EWMA_L = 4.0
+DRIFT_MIN_FRAC = 0.7     # 管制圖警報還要 6 小時平均偏離 ≥ 容許差 × 此值
+DRIFT_PERSIST = 6        # 管制圖警報要持續幾小時
+DRIFT_CHART_QUANTITIES = ("DO", "pH")   # 管制圖只用在關鍵水質；SC 本身跳動大，用了誤報多

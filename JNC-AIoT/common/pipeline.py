@@ -28,6 +28,13 @@ from state.pond import assess, state
 CACHE = ROOT / ".cache"
 
 
+def _settings_key() -> bytes:
+    """影響診斷與預測的設定；改了就重算快取。"""
+    from forecast.pond import WEATHER_FEATURES
+    keys = sorted(k for k in dir(C) if k.isupper())
+    return (repr([(k, getattr(C, k)) for k in keys]) + repr(WEATHER_FEATURES)).encode()
+
+
 @dataclass
 class PondPipeline:
     df: pd.DataFrame
@@ -44,7 +51,7 @@ class PondPipeline:
         df = load_clean("pond")
         frame = assess(df)
         key = hashlib.md5(pd.util.hash_pandas_object(frame.select_dtypes("number"), index=True)
-                          .values.tobytes() + str(FOLDS).encode() + b"v2").hexdigest()[:10]
+                          .values.tobytes() + str(FOLDS).encode() + b"v2" + _settings_key()).hexdigest()[:10]
         path = CACHE / f"pond_{key}.pkl"
         if use_cache and path.exists():
             hourly_diag, pred, models, iforest = pickle.loads(path.read_bytes())

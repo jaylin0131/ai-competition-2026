@@ -27,12 +27,13 @@ def _overlap(ep: pd.DataFrame, start, end, target, slack_h: int = 3) -> pd.DataF
     return ep[m]
 
 
-def synthetic_eval(df: pd.DataFrame, seeds=range(5), n: int = 10) -> tuple[pd.DataFrame, dict]:
+def synthetic_eval(df: pd.DataFrame, seeds=range(5), n: int = 10,
+                   drift_method: str | None = None) -> tuple[pd.DataFrame, dict]:
     cols = [c for cols in C.PROBES.values() for c in cols]
     recs, fp, weeks = [], 0, 0.0
     for seed in seeds:
         bad, labels = inject_faults(df, cols, n=n, seed=seed, start=CLEAN_WINDOW[0], end=CLEAN_WINDOW[1])
-        ep = to_episodes(diagnose_frame(bad))
+        ep = to_episodes(diagnose_frame(bad, drift_method=drift_method))
         ep = ep[ep["type"].isin(SENSOR_TYPES) & (ep["confidence"] >= C.ALARM_MIN_CONF)
                 & (ep["start"] >= CLEAN_WINDOW[0]) & (ep["start"] <= CLEAN_WINDOW[1])]
         matched = set()
@@ -54,8 +55,9 @@ def synthetic_eval(df: pd.DataFrame, seeds=range(5), n: int = 10) -> tuple[pd.Da
     return by_type, summary
 
 
-def known_event_eval(df: pd.DataFrame, hourly: pd.DataFrame | None = None) -> pd.DataFrame:
-    ep = to_episodes(diagnose_frame(df) if hourly is None else hourly)
+def known_event_eval(df: pd.DataFrame, hourly: pd.DataFrame | None = None,
+                     drift_method: str | None = None) -> pd.DataFrame:
+    ep = to_episodes(diagnose_frame(df, drift_method=drift_method) if hourly is None else hourly)
     ep = ep[ep["type"].isin(SENSOR_TYPES) & (ep["confidence"] >= C.ALARM_MIN_CONF)]
     rows = []
     for ev in pond_events().itertuples():

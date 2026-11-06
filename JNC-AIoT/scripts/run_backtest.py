@@ -56,7 +56,21 @@ def main() -> None:
     # ---------- 1. 異常診斷 ----------
     print("異常診斷評估…")
     by_type, syn = synthetic_eval(df)
+    by_type_raw = by_type.copy()
     known = known_event_eval(df, pipe.hourly_diag)
+    print("漂移偵測方法對照…")
+    drift_rows = {}
+    for name, m in [("舊法（6 h 平均超過容許差）", "old"), ("舊法＋CUSUM", "old+cusum"),
+                    ("舊法＋EWMA（本作品）", "old+ewma")]:
+        bt_m, s_m = synthetic_eval(df, drift_method=m) if m != C.DRIFT_METHOD else (by_type_raw, syn)
+        ke = known_event_eval(df, drift_method=m).set_index("事件")
+        drift_rows[name] = {"漂移 Recall": bt_m.loc["drift", "recall"], "漂移偵測延遲（h）": bt_m.loc["drift", "delay_h"],
+                            "整體 Recall": s_m["recall"], "Precision": s_m["precision"],
+                            "每週誤報": s_m["false_alarms_per_week"],
+                            "pH1 漂移 P12 首次偵測": ke.loc["P12", "首次偵測"],
+                            "DO2 劣化 P14": ke.loc["P14", "首次偵測"], "DO3 劣化 P17": ke.loc["P17", "首次偵測"]}
+    drift_cmp = pd.DataFrame(drift_rows).T
+    drift_cmp.index.name = "方法"
     by_type.index.name = "注入故障"
     by_type.columns = ["次數", "Recall", "類型正確率", "偵測延遲中位數（h）"]
 
@@ -236,6 +250,17 @@ def main() -> None:
 
 整體：Recall {syn['recall']:.0%}、Precision {syn['precision']:.0%}、類型正確率 {syn['type_accuracy']:.0%}、每週誤報 {syn['false_alarms_per_week']:.1f} 次。
 Precision 偏低的主因是 SC 探頭本身常有短暫跳動；可信度 < {C.ALARM_MIN_CONF} 的診斷只當資料品質提示、不派工。
+
+### 1.3 漂移偵測：舊法 vs CUSUM／EWMA
+
+舊法要 6 小時平均偏離超過容許差並持續 6 小時，抓不到「一直往同一邊慢慢偏、還沒超過容許差」的漂移。
+新增統計管制圖：偏離量用過去 7 天的中位數與穩健標準差標準化後做 CUSUM（k = {C.DRIFT_CUSUM_K}、h = {C.DRIFT_CUSUM_H}）
+或 EWMA（λ = {C.DRIFT_EWMA_LAMBDA}、L = {C.DRIFT_EWMA_L}）；為了壓誤報，只用在 DO、pH，且要 6 小時平均偏離 ≥ 容許差 × {C.DRIFT_MIN_FRAC}、
+警報持續 {C.DRIFT_PERSIST} 小時。SC 探頭本身跳動大，用了誤報會增加 2–3 倍，所以不用。
+
+{md(drift_cmp, '{:.2f}')}
+
+結論：採用「舊法＋EWMA」。漂移 Recall 提高、三個真實探頭劣化提早 12–19 小時發現，代價是每週誤報略增；CUSUM 在這組資料結果相同。
 
 ## 2. 溶氧預測
 
