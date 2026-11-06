@@ -45,7 +45,7 @@
 
 ## 4. 下一步
 
-1. **D6 語言模型實測（S11）**：需要安裝 Ollama 並下載 Gemma 4 E4B、Gemma-3-TAIDE-12b-Chat-2602（尚未取得同意，未安裝）。抽 10 張回放工單比較數字守門員擋下次數、中文品質、筆電速度，寫在 notes/llm-test.md
+1. **D6 語言模型實測（S11）**：測試腳本 `scripts/llm_test.py` 已寫好，但這台 Mac 跑不了（Ollama 要 macOS 14 以上，這台 13.7.8、8 GB、硬碟只剩 2 GB）。請由有 macOS 14＋／Windows／Linux、16 GB 以上記憶體的隊員照 [notes/llm-test-howto.md](notes/llm-test-howto.md) 執行，結果寫進 notes/llm-test.md。gemma4:e4b 約 6.6–9.5 GB；TAIDE 12B 要本人在 Hugging Face 同意授權
 2. 11/8 M4（回放觸發工單）程式面已達成；「推播」尚未做，可在平台加通知或寫說明書時說明以工單清單代替
 3. 規格對照剩下：I7（執行紀錄接回再學習）、I9（pH 預測）、I10（說明書寫明以檔案模擬資料平台）、I11（逐筆成本比較，可接 ops_risk）、I5 等企業回覆 GI 定義
 4. 11/15 閉環 demo＋錄影：側欄「跳到展示情境」5 個時間點＋「注入故障」示範 Fallback 與壞探頭排除
