@@ -1,7 +1,7 @@
 # 執行甘特圖（Mermaid 版）
 
-> 由 `scripts/build_gantt.py` 從 `tasks.csv` 產生，資料日期 2026-11-08。
-> 進度 5/30（17%），距 12/1 截止 23 天。
+> 由 `scripts/build_gantt.py` 從 `tasks.csv` 產生，資料日期 2026-11-09。
+> 進度 5/30（17%），距 12/1 截止 22 天。
 > 互動版請開 [gantt.html](gantt.html)。
 
 ```mermaid
