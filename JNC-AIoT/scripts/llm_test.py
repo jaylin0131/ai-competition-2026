@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import platform
 import re
@@ -87,10 +88,11 @@ def machine() -> str:
     return f"{cpu}，{mem:.0f} GB RAM，{platform.system()} {platform.mac_ver()[0]}，{ver}"
 
 
-def write(results: dict[str, list[dict]], orders: list[dict]) -> None:
-    RAW.mkdir(parents=True, exist_ok=True)
+def write(results: dict[str, list[dict]], orders: list[dict],
+          report: Path = OUT, raw_dir: Path = RAW) -> None:
+    raw_dir.mkdir(parents=True, exist_ok=True)
     for m, rows in results.items():
-        (RAW / f"{m.replace(':', '_').replace('/', '_')}.json").write_text(
+        (raw_dir / f"{m.replace(':', '_').replace('/', '_')}.json").write_text(
             json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
     lines = [f"# 本地語言模型實測（D6／S11）", "",
              f"> 由 `scripts/llm_test.py` 產生（{date.today().isoformat()}）。機器：{machine()}。",
@@ -107,8 +109,8 @@ def write(results: dict[str, list[dict]], orders: list[dict]) -> None:
                      f"{sum(r['tok_per_s'] for r in ok) / max(len(ok), 1):.1f} | （待填） |")
     lines += ["", "## 測試工單（範本原文）", ""]
     for w in orders:
-        tag = f"（注入 {w['fault']}）" if w["fault"] else ""
-        lines.append(f"- **{w['工單編號']}** {w['ts']}{tag}：{w['說明']}")
+        tag = f"（注入 {w['fault']}）" if w.get("fault") else ""
+        lines.append(f"- **{w['工單編號']}** {w.get('ts', w.get('場域', ''))}{tag}：{w['說明']}")
     for m, rows in results.items():
         lines += ["", f"## {m} 輸出", ""]
         for r in rows:
@@ -116,19 +118,41 @@ def write(results: dict[str, list[dict]], orders: list[dict]) -> None:
             cn = f"；中文數字：{'、'.join(r['cn_numbers'])}" if r["cn_numbers"] else ""
             lines.append(f"- **{r['工單']}**（{r['seconds']} 秒，守門員{flag}{cn}）：{r['output'] or '—'}")
     lines += ["", "## 結論", "", "（測完由負責人填寫：選哪個模型、是否預設開啟 LLM 改寫、決賽離線方案）", ""]
-    OUT.write_text("\n".join(lines), encoding="utf-8")
+    report.write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> None:
-    models = sys.argv[1:] or ["gemma4:e4b"]
-    orders = collect()
+    parser = argparse.ArgumentParser(description="測試本機模型的工單改寫")
+    parser.add_argument("models", nargs="*", help="Ollama 模型名稱")
+    parser.add_argument("--orders", type=Path, help="含工單編號、說明的工單 JSON 陣列")
+    parser.add_argument("--output-dir", type=Path, help="指定新目錄保存報告與原始結果")
+    args = parser.parse_args()
+    if bool(args.orders) != bool(args.output_dir):
+        parser.error("--orders 與 --output-dir 必須一起指定")
+    if args.orders:
+        if args.output_dir.exists():
+            parser.error("--output-dir 必須是尚未建立的目錄")
+        orders = json.loads(args.orders.read_text(encoding="utf-8"))
+        if not isinstance(orders, list) or not orders or any(
+            not isinstance(w, dict) or any(
+                not isinstance(w.get(key), str) or not w[key].strip()
+                for key in ("工單編號", "說明")
+            ) for w in orders
+        ):
+            parser.error("工單 JSON 必須是非空陣列，每張工單須有工單編號及說明")
+        if len({w["工單編號"] for w in orders}) != len(orders):
+            parser.error("工單編號不可重複")
+        report, raw_dir = args.output_dir / "llm-test.md", args.output_dir / "raw"
+    else:
+        orders, report, raw_dir = collect(), OUT, RAW
+    models = args.models or ["gemma4:e4b"]
     print(f"收集到 {len(orders)} 張工單")
     results = {}
     for m in models:
         print(f"測試 {m}…")
         results[m] = run(m, orders)
-    write(results, orders)
-    print(f"完成：{OUT.relative_to(ROOT)}")
+    write(results, orders, report, raw_dir)
+    print(f"完成：{report}")
 
 
 if __name__ == "__main__":
