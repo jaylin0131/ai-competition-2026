@@ -7,7 +7,7 @@
 | 資料夾 | 內容 |
 |---|---|
 | [JNC-AIoT/](JNC-AIoT/) | 企業命題類 AI 應用組：銘祥科技 AIoT 預測維護與異常診斷 |
-| [QKD-Eavesdrop-AI/](QKD-Eavesdrop-AI/) | 大會專題類資電領域組：QKD 鏈路 AI 健康診斷 |
+| [QKD-Eavesdrop-AI/](QKD-Eavesdrop-AI/) | 只剩團隊時程網站用的 QKD 時程與名冊；QKD 作品的程式與文件已搬到另一個 repo |
 | [site/](site/) | 團隊時程網站：兩件作品的甘特圖，成員可在線上勾選、修改、新增、刪除任務 |
 | [deploy/](deploy/) | 網站部署說明（Cloudflare Pages＋Supabase）與資料庫 SQL |
 | [functions/](functions/)、[worker/](worker/)、`wrangler.jsonc` | Cloudflare 伺服器端程式：驗證並寫入規劃的修改（Workers 與 Pages 共用） |
