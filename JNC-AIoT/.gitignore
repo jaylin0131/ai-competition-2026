@@ -8,3 +8,5 @@ venv/
 data/raw/*.csv
 data/processed/*.csv
 .cache/
+backtest/feedback.csv
+backtest/relearn_log.csv

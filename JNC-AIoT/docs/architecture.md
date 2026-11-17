@@ -85,7 +85,7 @@ decide(state, diagnoses, forecast) -> [標準決策資料 9 欄 + **類別、執
 | 02 大數據 | `common/clean.py`、`common/baseline.py` |
 | 03 AI 分析 | `state/pond.py`、`diagnose/pond.py`、`forecast/pond.py` |
 | 04 決策引擎 | `decide/engine.py`、`decide/workorder.py` |
-| 05 執行回饋 | `backtest/closed_loop.py`（模擬 SCADA／PLC、再學習 α、β）、`app/streamlit_app.py` 的人工確認與執行紀錄 |
+| 05 執行回饋 | `backtest/closed_loop.py`（模擬 SCADA／PLC、回測）、`backtest/feedback.py`（執行紀錄寫檔、結果驗證、依回饋再學習 α、β）、`app/streamlit_app.py` 的人工確認、執行回饋頁與「重新學習」按鈕 |
 
 標準決策資料範例：
 
