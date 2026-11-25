@@ -111,7 +111,7 @@ def cost(m: dict) -> float:
 
 def tune(f, pred, models, effect, decay, tune_period, valid_period,
          alphas=(0.1, 0.2, 0.3, 0.4, 0.5), betas=(0.02, 0.05, 0.1)) -> dict:
-    """再學習：在調整期找成本最低的 (α, β)，到驗證期確認比兩個基準好才標記 validated。"""
+    """再學習：在調整期找成本最低的 (α, β)；驗證期成本要比最好的基準低 VALIDATE_MARGIN 以上才標記 validated。"""
     grid = []
     for a in alphas:
         for b in betas:
@@ -121,9 +121,16 @@ def tune(f, pred, models, effect, decay, tune_period, valid_period,
     best = grid.iloc[0]
     val, _ = compare(f, pred, models, effect, decay, best["alpha"], best["beta"], *valid_period)
     c = {k: cost(v) for k, v in val.to_dict("index").items()}
-    validated = c["AI 決策"] <= min(v for k, v in c.items() if k != "AI 決策")
-    return {"alpha": float(best["alpha"]), "beta": float(best["beta"]), "validated": bool(validated),
+    margin = validation_margin(c)
+    return {"alpha": float(best["alpha"]), "beta": float(best["beta"]),
+            "validated": bool(margin >= C.VALIDATE_MARGIN), "margin": margin,
             "grid": grid, "validation": val, "validation_cost": c}
+
+
+def validation_margin(costs: dict) -> float:
+    """AI 決策比最好的基準省多少成本（比例）。負值＝輸給基準。"""
+    best = min(v for k, v in costs.items() if k != "AI 決策")
+    return float(1 - costs["AI 決策"] / best) if best else 0.0
 
 
 def save_params(params: dict) -> None:

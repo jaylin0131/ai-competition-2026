@@ -177,18 +177,39 @@ def evaluate(f: pd.DataFrame, preds: dict[str, pd.DataFrame], start) -> pd.DataF
     return pd.DataFrame(rows)
 
 
-def warning_eval(f: pd.DataFrame, pred: pd.DataFrame, start, alpha: float = C.RISK_ALPHA) -> dict:
-    """低溶氧事件（DO 由 ≥ 門檻跌破門檻）的提前預警：事件前 6 小時內 p_low > α 即算有預警。"""
+def low_do_onsets(do: pd.Series, min_clear: int = 0) -> pd.DatetimeIndex:
+    """低溶氧事件的起點：DO 由 ≥ 門檻跌破門檻。
+
+    min_clear > 0 時，跌破前的 min_clear 小時都要有資料且 ≥ 門檻，才算一次「新」事件；
+    在門檻附近反覆上下穿越的情況不重複計算，也避免「事件前就已經低於門檻」被算成提前預警。"""
+    onset = (do < C.DO_LOW) & (do.shift(1) >= C.DO_LOW)
+    if min_clear:
+        above = (do >= C.DO_LOW).astype(float).where(do.notna())
+        onset &= above.shift(1).rolling(min_clear, min_periods=min_clear).min() == 1
+    return do.index[onset]
+
+
+def rule_alarm(f: pd.DataFrame, level: float) -> pd.Series:
+    """簡單規則基準：融合 DO 低於 level 就告警（不用預測模型）。"""
+    return f["DO"] < level
+
+
+def warning_eval(f: pd.DataFrame, pred: pd.DataFrame, start, alpha: float = C.RISK_ALPHA,
+                 min_clear: int = 0, alarm: pd.Series | None = None) -> dict:
+    """低溶氧事件的提前預警：事件前 1–6 小時內有告警即算預警成功。
+
+    告警預設為 p_low > α；傳入 alarm（布林序列）可評估其他方法，例如 rule_alarm()。"""
     do = f["DO"].loc[start:]
-    onset = do.index[(do < C.DO_LOW) & (do.shift(1) >= C.DO_LOW)]
+    onset = low_do_onsets(do, min_clear)
+    alarms = (pred["p_low"] > alpha) if alarm is None else alarm.astype(bool)
+    alarms = alarms.reindex(do.index, fill_value=False)
     leads, hit = [], 0
     for t in onset:
-        win = pred["p_low"].loc[t - pd.Timedelta(hours=6):t - pd.Timedelta(hours=1)]
-        warned = win[win > alpha]
+        win = alarms.loc[t - pd.Timedelta(hours=6):t - pd.Timedelta(hours=1)]
+        warned = win[win]
         if len(warned):
             hit += 1
             leads.append((t - warned.index[0]).total_seconds() / 3600)
-    alarms = (pred["p_low"].loc[start:] > alpha)
     alarm_on = alarms & ~alarms.shift(1, fill_value=False)
     false = 0
     for t in alarm_on[alarm_on].index:

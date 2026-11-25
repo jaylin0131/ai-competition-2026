@@ -55,6 +55,11 @@ PEAK_HOURS = range(9, 21)    # 尖峰時段（簡化）
 RISK_ALPHA = 0.30            # P(DO < DO_LOW, 6 h 內) 超過 α 即建議增氧；由 backtest 調整
 SAVE_BETA = 0.05             # 風險低於 β 且 DO 充足才建議節能停機
 PARAMS_FILE = "decide/params.json"  # backtest 調整後的 α、β 寫在這裡
+# 「已驗證」的門檻：驗證期成本要比最好的基準低至少這個比例，才把 validated 設為 true。
+# 只贏 1–2% 在模擬誤差範圍內，不足以支持「可自動執行」（指導老師 11/25 建議）
+VALIDATE_MARGIN = 0.05
+# 預警評估的事件定義：跌破門檻前要連續幾小時 ≥ 門檻才算一次新的低溶氧事件
+EVENT_MIN_CLEAR = 6
 
 # ---- 營運風險（預期損失，元）：估計值，待企業確認；回測的成本函數也用這組 ----
 LOSS_PER_LOW_HOUR = 100.0      # 每 1 小時低溶氧（DO < 3）的損失

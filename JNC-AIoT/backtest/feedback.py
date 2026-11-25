@@ -122,7 +122,8 @@ def relearn(pipe, now, log: pd.DataFrame | None = None, save: bool = True) -> di
         r = CL.tune(pipe.frame, pipe.pred, pipe.models, p["aerator_effect"], p["effect_decay"],
                     (t0, t1), (t1 + pd.Timedelta(hours=1), now))
         has_event = r["validation"].loc["歷史實際", "低溶氧時數（DO<3）"] > 0
-        verdict = ("優於所有基準" if r["validated"] else "未優於所有基準") if has_event else \
+        verdict = (f"比最好的基準省 {r['margin']:.1%}，"
+                   f"{'達到' if r['validated'] else '未達'} {C.VALIDATE_MARGIN:.0%} 驗證門檻") if has_event else \
             f"驗證期沒有低溶氧事件，無法驗證，維持原判定（{'已驗證' if before.get('validated') else '未驗證'}）"
         notes.append(f"資料再學習：{t0:%m/%d}–{t1:%m/%d} 調參、{t1:%m/%d}–{now:%m/%d} 驗證 → "
                      f"α {before['alpha']} → {r['alpha']}、β {before['beta']} → {r['beta']}（{verdict}）")
