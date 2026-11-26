@@ -167,3 +167,57 @@ def test_aerator_degradation_triggers_maintenance():
     fc = {**_fc(0.0, None, 4.0), "aerator": aer, "aerator_fail_prob": aer["fail_prob"]}
     d = decide(_state(4.0, True), [], fc, params)
     assert any(r["設備"] == "增氧機" and r["動作"] == "預防性檢修" for r in d)
+
+
+def test_feedback_verify_and_relearn(tmp_path, monkeypatch):
+    """I7：執行紀錄寫檔 → 回放時間經過後驗證 → 再學習寫回參數。"""
+    import backtest.feedback as FB
+    from backtest import closed_loop as CL
+    from common.pipeline import PondPipeline
+    monkeypatch.setattr(FB, "RELEARN_LOG", tmp_path / "relearn.csv")
+    saved = {}
+    monkeypatch.setattr(CL, "save_params", lambda p: saved.update(p))
+    path = tmp_path / "fb.csv"
+    pipe = PondPipeline.build()
+    ts = "2026-07-19 18:00"
+    out = pipe.step(ts)
+    d = next(x for x in out["decisions"] if x["設備"] in FB.AERATORS)
+    FB.record(d, "核准執行", ts, out["forecast"], out["state"], pipe.params, path)
+    FB.record(d, "核准執行", ts, out["forecast"], out["state"], pipe.params, path)   # 同編號只記一次
+    log = FB.load(path)
+    assert len(log) == 1
+    assert FB.verify(log, pipe.frame, "2026-07-19 20:00")["預警驗證（6 h 內 DO<3）"].iloc[0] == "待驗證"
+    v = FB.verify(log, pipe.frame, "2026-07-20 06:00")
+    assert v["預警驗證（6 h 內 DO<3）"].iloc[0] in ("成真", "未發生")
+    assert "→" in v["DO 3 h 後：歷史實際"].iloc[0]
+    r = FB.relearn(pipe, "2026-08-20 00:00", log)
+    assert FB.ALPHA_RANGE[0] <= r["after"]["alpha"] <= FB.ALPHA_RANGE[1]
+    assert saved["alpha"] == r["after"]["alpha"] and (tmp_path / "relearn.csv").exists()
+    # 驗證期（8/13–8/20）沒有低溶氧事件：維持原本的 validated
+    assert r["after"]["validated"] == pipe.params["validated"]
+
+
+def test_low_do_onsets_new_definition():
+    """新事件定義：跌破前 6 小時都 ≥ 門檻才算新事件；在門檻附近反覆穿越不重複計算。"""
+    from forecast.pond import low_do_onsets, rule_alarm, warning_eval
+    idx = pd.date_range("2026-07-01", periods=30, freq="h")
+    do = pd.Series(4.0, index=idx)
+    do.iloc[10] = 2.9                      # 第 1 次跌破：前 6 小時都是 4.0 → 新事件
+    do.iloc[12] = 2.9                      # 第 2 次跌破：前 6 小時內有 2.9 → 只在舊定義算事件
+    do.iloc[20:23] = [3.05, 3.05, 2.9]     # 第 3 次：先在 3.0–3.1 之間，前 6 小時都 ≥ 3 → 新事件
+    assert list(low_do_onsets(do)) == [idx[10], idx[12], idx[22]]
+    assert list(low_do_onsets(do, 6)) == [idx[10], idx[22]]
+    f = pd.DataFrame({"DO": do})
+    pred = pd.DataFrame({"p_low": 0.0}, index=idx)
+    r = warning_eval(f, pred, idx[0], min_clear=6, alarm=rule_alarm(f, 3.1))
+    assert r["低溶氧事件數"] == 2 and r["提前預警數"] == 1 and r["平均提前小時"] == 2.0
+
+
+def test_validation_margin():
+    """只贏基準 1% 不算已驗證（門檻 VALIDATE_MARGIN）。"""
+    from backtest.closed_loop import validation_margin
+    costs = {"歷史實際": 59000, "固定門檻（原始探頭）": 22000, "固定門檻": 20770, "AI 決策": 20555}
+    m = validation_margin(costs)
+    assert 0.009 < m < 0.011 and m < C.VALIDATE_MARGIN
+    assert validation_margin({**costs, "AI 決策": 19000}) >= C.VALIDATE_MARGIN
+    assert validation_margin({**costs, "AI 決策": 21000}) < 0

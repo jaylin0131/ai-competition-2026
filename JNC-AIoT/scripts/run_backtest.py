@@ -26,8 +26,8 @@ from common import config as C
 from common.load_jnc import ROOT
 from common.pipeline import PondPipeline
 from backtest.equipment import false_alarm_rate, synthetic_lead
-from forecast.pond import FOLDS, WEATHER_FEATURES, aerator_health, baselines, evaluate, ops_risk, walk_forward, \
-    warning_eval
+from forecast.pond import FOLDS, WEATHER_FEATURES, aerator_health, baselines, evaluate, low_do_onsets, ops_risk, \
+    rule_alarm, walk_forward, warning_eval
 
 OUT = ROOT / "backtest"
 FIG = OUT / "figures"
@@ -87,9 +87,7 @@ def main() -> None:
     pred_nw, _ = walk_forward(f, weather=False)
     ev_w = evaluate(f, {"含環境（本作品）": pred, "不含環境": pred_nw}, start)
     mae_w = ev_w.pivot(index="模型", columns="預測時距", values="MAE")
-    w_w = pd.DataFrame({"含環境（本作品）": warning_eval(f, pred, start, 0.3),
-                        "不含環境": warning_eval(f, pred_nw, start, 0.3)}).T.drop(columns="α")
-    mae_w.index.name = w_w.index.name = "模型"
+    mae_w.index.name = "模型"
 
     # ---------- 2b. 增氧機故障機率、營運風險 ----------
     print("設備故障機率與營運風險…")
@@ -113,20 +111,53 @@ def main() -> None:
     # ---------- 3. 閉環成效 ----------
     print("閉環模擬…")
     est = E.estimate(f, pd.Timestamp(FOLDS[0][0]) - pd.Timedelta(hours=1))
+    eng = E.ENGINEERING
+    tuned = CL.tune(f, pred, models, eng["aerator_effect"], eng["effect_decay"],
+                    ("2026-07-15", "2026-07-31 23:00"), ("2026-08-01", str(end)))
+    # 閉環比較一律用再學習後實際上線的 α、β（與 decide/params.json 一致）
     tables, logs_eng = {}, None
     for eff in [E.ENGINEERING, est]:
-        tab, logs = CL.compare(f, pred, models, eff["aerator_effect"], eff["effect_decay"])
+        tab, logs = CL.compare(f, pred, models, eff["aerator_effect"], eff["effect_decay"],
+                               tuned["alpha"], tuned["beta"])
         tab.index.name = "策略"
         tables[eff["source"]] = tab
         if eff is E.ENGINEERING:
             logs_eng = logs
-    eng = E.ENGINEERING
-    tuned = CL.tune(f, pred, models, eng["aerator_effect"], eng["effect_decay"],
-                    ("2026-07-15", "2026-07-31 23:00"), ("2026-08-01", str(end)))
     params = {"alpha": tuned["alpha"], "beta": tuned["beta"], "validated": tuned["validated"],
               "aerator_effect": eng["aerator_effect"], "effect_decay": eng["effect_decay"],
               "updated": date.today().isoformat(), "note": "由 scripts/run_backtest.py 再學習產生"}
     CL.save_params(params)
+
+    # ---------- 2c. 提前預警：重新定義事件＋簡單規則基準（指導老師 11/25 建議） ----------
+    print("提前預警（新事件定義＋簡單規則基準）…")
+    a_live = params["alpha"]
+    K = C.EVENT_MIN_CLEAR
+    do_oos = f["DO"].loc[start:]
+    on_old, on_new = low_do_onsets(do_oos), low_do_onsets(do_oos, K)
+    pre_low = sum(bool((do_oos.loc[t - pd.Timedelta(hours=6):t - pd.Timedelta(hours=1)] < C.DO_LOW).any())
+                  for t in on_old)
+    methods = {f"AI 預測（α = {a_live}，上線參數）": dict(alpha=a_live),
+               "AI 預測（α = 0.3，舊報告）": dict(alpha=0.3),
+               "簡單規則：DO < 3.1 就告警": dict(alarm=rule_alarm(f, 3.1)),
+               "簡單規則：DO < 3.2 就告警": dict(alarm=rule_alarm(f, 3.2)),
+               "固定門檻：DO < 3.0 才告警": dict(alarm=rule_alarm(f, C.DO_LOW))}
+    warn_cmp = {}
+    for name, kw in methods.items():
+        for label, mc in [("舊定義", 0), (f"新定義（前 {K} h 都 ≥ 3）", K)]:
+            r = warning_eval(f, pred, start, min_clear=mc, **{"alpha": kw.get("alpha", 0.0), **kw})
+            warn_cmp[(name, label)] = {"事件數": r["低溶氧事件數"], "預警率": r["預警率"],
+                                       "平均提前（h）": r["平均提前小時"], "每週誤報": r["誤報（每週）"]}
+    warn_cmp = pd.DataFrame(warn_cmp).T
+    warn_new = warn_cmp.xs(f"新定義（前 {K} h 都 ≥ 3）", level=1)
+    warn_old = warn_cmp.xs("舊定義", level=1)
+    warn_new.index.name = warn_old.index.name = "方法"
+    w_live = warn_new.loc[f"AI 預測（α = {a_live}，上線參數）"]
+    w_rule = warn_new.loc["簡單規則：DO < 3.1 就告警"]
+    w_a3 = warn_new.loc["AI 預測（α = 0.3，舊報告）"]
+    w_r32 = warn_new.loc["簡單規則：DO < 3.2 就告警"]
+    w_w = pd.DataFrame({"含環境（本作品）": warning_eval(f, pred, start, a_live, K),
+                        "不含環境": warning_eval(f, pred_nw, start, a_live, K)}).T.drop(columns="α")
+    w_w.index.name = "模型"
 
     # 取捨曲線
     front = []
@@ -208,14 +239,19 @@ def main() -> None:
 
     # ---------- 報告 ----------
     t_eng = tables[eng["source"]]
+    t_dat = tables[est["source"]]
     hist, thr_raw, thr, ai = (t_eng.loc[k] for k in CL.POLICIES)
+    hist_d, _, thr_d, ai_d = (t_dat.loc[k] for k in CL.POLICIES)
     pct = lambda x, y: (1 - x / y) * 100 if y else 0.0
-    w3 = warn.loc[0.3]
     known_hit = (known["偵測到"] == "是").sum()
+    vc = tuned["validation_cost"]
+    best_base = min((k for k in vc if k != "AI 決策"), key=vc.get)
     text = f"""# 成效驗證報告（魚塭 pond）
 
 > 由 `scripts/run_backtest.py` 自動產生（{date.today().isoformat()}），請勿手改；改了模組後重跑。
 > 樣本外期間：{start:%m/%d}–{end:%m/%d}（滾動驗證：每段只用之前的資料訓練，見 forecast/pond.py 的 FOLDS）。
+> 11/26 依指導老師建議修正：預警改用新的事件定義並加入簡單規則基準、數字一律用上線參數 α = {a_live}、
+> 閉環成效同時列兩組增氧效果並與固定門檻比較、「已驗證」要比最好的基準省 {C.VALIDATE_MARGIN:.0%} 以上。
 
 ## 重點
 
@@ -224,17 +260,21 @@ def main() -> None:
 | 已知故障事件（notes/eda/events.md） | **{known_hit}/{len(known)} 偵測到** | — |
 | 合成故障 Recall | **{syn['recall']:.0%}**（{syn['labels']} 次注入） | 物理範圍檢查只抓得到掉 0、超範圍 |
 | 每週誤報（乾淨期間） | **{syn['false_alarms_per_week']:.1f} 次** | — |
+| **探頭可信度的效果**（同一條固定門檻規則，只差有沒有先排除故障探頭；工程估計） | **無效告警 {thr_raw['無效告警時數']:.0f} → {thr['無效告警時數']:.0f} 小時、用電 {thr_raw['增氧機用電（度）']:.0f} → {thr['增氧機用電（度）']:.0f} 度（−{pct(thr['增氧機用電（度）'], thr_raw['增氧機用電（度）']):.0f}%）、低溶氧 {thr_raw['低溶氧時數（DO<3）']:.0f} → {thr['低溶氧時數（DO<3）']:.0f} 小時** | 直接用原始探頭（一般 SCADA） |
+| 無效告警時數（DO 其實 ≥ 3.5，工程估計） | AI 決策（α = {a_live}）{ai['無效告警時數']:.0f} 小時 | 固定門檻 {thr['無效告警時數']:.0f}、原始探頭門檻 {thr_raw['無效告警時數']:.0f} 小時 |
 | DO 預測 MAE（1／3／6 h） | **{mae.loc['GBDT（本作品）', '1 h']:.3f}／{mae.loc['GBDT（本作品）', '3 h']:.3f}／{mae.loc['GBDT（本作品）', '6 h']:.3f}** | 持續法 {mae.loc['持續法', '1 h']:.3f}／{mae.loc['持續法', '3 h']:.3f}／{mae.loc['持續法', '6 h']:.3f}（改善 {gain['1 h']:.0f}%／{gain['3 h']:.0f}%／{gain['6 h']:.0f}%） |
-| 低溶氧提前預警（α = 0.3） | **{w3['預警率']:.0%} 事件、平均提前 {w3['平均提前小時']:.1f} 小時**，每週誤報 {w3['誤報（每週）']:.1f} 次 | 固定門檻：跌破才告警（提前 0 小時） |
-| 低溶氧時數（工程估計效果） | **{ai['低溶氧時數（DO<3）']:.0f} 小時**（比歷史少 {pct(ai['低溶氧時數（DO<3）'], hist['低溶氧時數（DO<3）']):.0f}%） | 歷史 {hist['低溶氧時數（DO<3）']:.0f}、固定門檻 {thr['低溶氧時數（DO<3）']:.0f}、原始探頭門檻 {thr_raw['低溶氧時數（DO<3）']:.0f} |
-| 危急時數（DO < 2.5） | **{ai['危急時數（DO<2.5）']:.0f} 小時**（比歷史少 {pct(ai['危急時數（DO<2.5）'], hist['危急時數（DO<2.5）']):.0f}%） | 歷史 {hist['危急時數（DO<2.5）']:.0f} |
-| 用電 | **{ai['增氧機用電（度）']:.0f} 度** | 原始探頭門檻 {thr_raw['增氧機用電（度）']:.0f} 度（AI 省 {pct(ai['增氧機用電（度）'], thr_raw['增氧機用電（度）']):.0f}%） |
-| 無效告警時數（DO 其實 ≥ 3.5） | **{ai['無效告警時數']:.0f} 小時** | 原始探頭門檻 {thr_raw['無效告警時數']:.0f} 小時 |
+| 低溶氧提前預警（新事件定義，α = {a_live}） | {w_live['預警率']:.0%} 事件、平均提前 {w_live['平均提前（h）']:.1f} 小時，每週誤報 {w_live['每週誤報']:.1f} 次（共 {w_live['事件數']:.0f} 個事件） | 簡單規則 DO < 3.1：{w_rule['預警率']:.0%}、提前 {w_rule['平均提前（h）']:.1f} 小時、每週誤報 {w_rule['每週誤報']:.1f} 次 |
+| 低溶氧時數（工程估計效果） | {ai['低溶氧時數（DO<3）']:.0f} 小時 | 歷史 {hist['低溶氧時數（DO<3）']:.0f}、固定門檻 {thr['低溶氧時數（DO<3）']:.0f}、原始探頭門檻 {thr_raw['低溶氧時數（DO<3）']:.0f} |
+| 低溶氧時數（資料估計效果） | {ai_d['低溶氧時數（DO<3）']:.0f} 小時 | 歷史 {hist_d['低溶氧時數（DO<3）']:.0f}、固定門檻 {thr_d['低溶氧時數（DO<3）']:.0f} |
+| 用電（工程估計） | AI 決策 {ai['增氧機用電（度）']:.0f} 度 | 固定門檻 {thr['增氧機用電（度）']:.0f}、原始探頭門檻 {thr_raw['增氧機用電（度）']:.0f} 度 |
+| 再學習驗證（8/01 起） | α = {tuned['alpha']}，成本比最好的基準（{best_base}）{'省' if tuned['margin'] >= 0 else '多'} {abs(tuned['margin']):.1%} → **{'已驗證' if tuned['validated'] else '未驗證'}**（門檻 {C.VALIDATE_MARGIN:.0%}） | — |
 
 **怎麼解讀**
-- AI 最大的價值是「先判斷探頭可不可信」：一般 SCADA 直接用探頭原始值，DO2 劣化（8/27–9/02）與 DO3 失效（9/19–9/25）期間讀到 0，會一直誤開備用增氧機與告警；AI 自動排除故障探頭並派工維修。
-- 預測讓告警提早約 {w3['平均提前小時']:.0f} 小時，現場有時間調整投餵或準備備用機。
-- 在同樣用電量下，AI 比調好的固定門檻只略好（見取捨曲線）：這個池子的低溶氧是長時間緩慢發生，增氧機全開也無法完全避免。**不誇大這一點**。
+- AI 最確定的價值是「先判斷探頭可不可信」：同一條「DO < 3 就開機」的規則，直接用探頭原始值時，DO2 劣化（8/27–9/02）與 DO3 失效（9/19–9/25）期間讀到 0，會一直誤開備用增氧機與告警（無效告警 {thr_raw['無效告警時數']:.0f} 小時）；先用狀態辨識排除故障探頭後降到 {thr['無效告警時數']:.0f} 小時，用電少 {pct(thr['增氧機用電（度）'], thr_raw['增氧機用電（度）']):.0f}%。這個比較不依賴預測模型與 α。
+- 預測性增氧（α = {a_live}）會多出無效告警（{ai['無效告警時數']:.0f} 小時）與用電（比固定門檻多 {-pct(ai['增氧機用電（度）'], thr['增氧機用電（度）']):.0f}%），換來較少的低溶氧時數，見取捨曲線。
+- 提前預警要和簡單規則比才有意義：舊定義的 {len(on_old)} 個「事件」中有 {pre_low} 個在跌破前 6 小時內 DO 就已經低於 3（在門檻附近反覆穿越），連「跌破 3 才告警」的固定門檻都能算出 {warn_old.loc['固定門檻：DO < 3.0 才告警', '預警率']:.0%} 預警率。改成「前 {K} 小時都 ≥ 3 才算新事件」後只剩 {len(on_new)} 個：同樣抓到 {w_a3['預警率']:.0%} 事件時，AI（α = 0.3）提前 {w_a3['平均提前（h）']:.1f} 小時、每週誤報 {w_a3['每週誤報']:.1f} 次，簡單規則 DO < 3.2 提前 {w_r32['平均提前（h）']:.1f} 小時、誤報 {w_r32['每週誤報']:.1f} 次。AI 略好，但只有 {len(on_new)} 個事件，**差距不足以下定論**。上線的 α = {a_live} 抓得多（{w_live['預警率']:.0%}），代價是每週誤報 {w_live['每週誤報']:.1f} 次。
+- 低溶氧時數的改善**依賴增氧機效果的假設**：工程估計（假設池子 0.5 公頃、水深 1.5 m）下 AI {ai['低溶氧時數（DO<3）']:.0f} 小時、固定門檻 {thr['低溶氧時數（DO<3）']:.0f} 小時；資料估計下只有 {hist_d['低溶氧時數（DO<3）']:.0f} → {ai_d['低溶氧時數（DO<3）']:.0f} 小時（少 {pct(ai_d['低溶氧時數（DO<3）'], hist_d['低溶氧時數（DO<3）']):.0f}%），固定門檻 {thr_d['低溶氧時數（DO<3）']:.0f}。和歷史操作比的大幅改善主要來自「有自動控制」，不是 AI 本身。
+- 再學習只比最好的基準省 {tuned['margin']:.1%}，{'達到' if tuned['validated'] else '未達'} {C.VALIDATE_MARGIN:.0%} 門檻，所以{'DO 已低於門檻的增氧可自動執行' if tuned['validated'] else '增氧決策一律人工確認（危急 DO < 2.5 的增氧仍自動執行）'}。
 
 ## 1. 異常診斷
 
@@ -276,11 +316,27 @@ RMSE（mg/L）：
 
 模型：{models[0].engine}（預測 h 小時後與現在的差，絕對誤差損失；本機缺 libomp 時自動改用 scikit-learn 的同類模型）。
 
-低溶氧提前預警（事件＝融合 DO 由 ≥ 3 跌破 3；事件前 1–6 小時內機率 > α 即算預警）：
+### 2.1 低溶氧提前預警：事件定義與簡單規則基準
+
+事件前 1–6 小時內有告警即算預警成功；誤報＝告警開始後 6 小時內 DO 沒有跌破 3。
+
+- **舊定義**：融合 DO 由 ≥ 3 跌破 3 就算一個事件，共 {len(on_old)} 個；其中 {pre_low} 個在跌破前 6 小時內 DO 已經低於 3（在門檻附近反覆穿越），「提前預警」其實是看到已經偏低的 DO。
+- **新定義**：跌破前 {K} 小時都要有資料且 ≥ 3，才算一次新的低溶氧事件，共 {len(on_new)} 個。
+- **簡單規則基準**：不用預測模型，「融合 DO 低於 3.1（或 3.2）就告警」；「DO < 3.0 才告警」就是一般 SCADA 的固定門檻（新定義下必然提前 0 小時）。
+
+新定義：
+
+{md(warn_new, '{:.2f}')}
+
+舊定義（前一版報告的算法，留作對照）：
+
+{md(warn_old, '{:.2f}')}
+
+AI 在不同 α 下（舊定義，供調參參考）：
 
 {md(warn, '{:.2f}')}
 
-### 2.1 環境資料（OA4 氣象站）的貢獻
+### 2.2 環境資料（OA4 氣象站）的貢獻
 
 特徵：{'、'.join(WEATHER_FEATURES)}（氣溫與水溫差、氣壓 3／6 小時變化、濕度）。氣象站凍結或讀到 0 的小時當缺值
 （約 {f['pressure'].isna().mean():.0%} 的小時，主要是 9/14 起的凍結）。全套 6 項（再加氣溫、氣壓本身）也比較過，3–6 小時 MAE 略差，所以只留這 4 項。
@@ -289,13 +345,13 @@ MAE（mg/L）：
 
 {md(mae_w, '{:.3f}')}
 
-提前預警（α = 0.3）：
+提前預警（新定義，α = {a_live}）：
 
 {md(w_w, '{:.2f}')}
 
 結論：加入環境資料後 MAE 差異在 ±0.003 以內（雜訊範圍），預警多抓到事件、提前時間略長，每週誤報略增。
 
-### 2.2 增氧機故障機率（設備預測維護）
+### 2.3 增氧機故障機率（設備預測維護）
 
 運轉功率 24 小時趨勢外推到低負載門檻 {C.AERATOR_LOW_LOAD_W:.0f} W，48 小時內低於門檻的機率 ≥ {C.AERATOR_FAIL_ALERT} 就排預防性檢修。
 資料期間增氧機沒有真的故障過（運轉功率 714–796 W），所以：
@@ -305,7 +361,7 @@ MAE（mg/L）：
 
 {md(aer_lead, '{:.0f}')}
 
-### 2.3 營運風險
+### 2.4 營運風險
 
 6 小時預期損失＝期望低溶氧時數 × {C.LOSS_PER_LOW_HOUR:.0f} 元＋期望危急時數 × {C.LOSS_PER_CRIT_HOUR:.0f} 元＋增氧電費＋增氧機故障機率 × {C.AERATOR_FAILURE_COST:.0f} 元；
 ≥ {C.OPS_RISK_MID:.0f} 元為「中」、≥ {C.OPS_RISK_HIGH:.0f} 元為「高」（單價為估計值，待企業確認）。下表檢查分級是否對應實際結果（樣本外，每 2 小時抽一次）：
@@ -314,7 +370,7 @@ MAE（mg/L）：
 
 ## 3. 閉環成效（模擬 SCADA／PLC 執行）
 
-反事實模擬（假設需人工確認的決策都被核准）：DO_sim = DO_實際 + Δ，Δ 由「策略與現場操作的台數差」累積並衰減（backtest/effect.py）。
+反事實模擬（AI 決策用上線參數 α = {tuned['alpha']}、β = {tuned['beta']}；假設需人工確認的決策都被核准）：DO_sim = DO_實際 + Δ，Δ 由「策略與現場操作的台數差」累積並衰減（backtest/effect.py）。
 增氧機效果有兩組：
 
 - **工程估計**：{eng['aerator_effect']} mg/L/h、衰減 {eng['effect_decay']}（{eng['source']}）
@@ -332,7 +388,8 @@ MAE（mg/L）：
 
 - 選到 α = {tuned['alpha']}、β = {tuned['beta']}
 - 驗證期成本：""" + "、".join(f"{k} {v:,.0f}" for k, v in tuned["validation_cost"].items()) + f"""
-- 是否優於所有基準：**{'是 → decide/params.json 設為 validated：DO 已低於門檻的增氧（風險低）自動執行；只是預測會低（風險中）仍需人工確認' if tuned['validated'] else '否 → 增氧決策一律人工確認'}**
+- 比最好的基準（{best_base}）{'省' if tuned['margin'] >= 0 else '多'} {abs(tuned['margin']):.1%}；「已驗證」門檻為省 {C.VALIDATE_MARGIN:.0%} 以上（common/config.py 的 VALIDATE_MARGIN，只贏 1–2% 在模擬誤差範圍內）
+- 結果：**{'已驗證 → DO 已低於門檻的增氧（風險低）自動執行；只是預測會低（風險中）仍需人工確認' if tuned['validated'] else '未驗證 → 增氧決策一律人工確認（危急 DO < 2.5 的增氧不受影響，仍自動執行）'}**
 
 ## 4. 狀態辨識
 

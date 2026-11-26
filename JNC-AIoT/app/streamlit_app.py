@@ -18,6 +18,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from common import config as C
+from backtest import feedback as FB
 from common.pipeline import PondPipeline
 from common.replay import FAULT_NAMES
 
@@ -46,7 +47,6 @@ pipe = get_pipe()
 idx = pipe.replay_index
 ss = st.session_state
 ss.setdefault("i", int(idx.get_loc(pd.Timestamp("2026-07-19 18:00"))))
-ss.setdefault("log", [])   # 執行回饋紀錄
 
 # ---------------- 側欄：回放器 ----------------
 with st.sidebar:
@@ -98,6 +98,7 @@ else:
     st.warning(f"示範模式：已在 {where} 注入「{FAULT_NAMES[fault_kind]}」"
                f"（{view.fault['start']:%m/%d %H:00}–{ts:%m/%d %H:00}），以下結果都是注入後重新計算的。")
 out = view.step(ts)
+fb_log = FB.load()
 s, fc, decs = out["state"], out["forecast"], out["decisions"]
 
 # ---------------- 標題與閉環 ----------------
@@ -108,7 +109,7 @@ stage_txt = [
     f"清洗、歷史基準<br>可用 DO 探頭 {s['probes_used']['DO']}/3",
     f"{s['light_text']}<br>{len([d for d in out['diagnoses'] if d['confidence'] >= C.ALARM_MIN_CONF and d['type'] != 'water_event'])} 項設備異常",
     f"{len(decs)} 筆決策<br>{sum(d['執行模式'] != '自動執行' for d in decs)} 筆待人工／Fallback",
-    f"{len(ss.log)} 筆執行紀錄<br>回測驗證成效",
+    f"{len(fb_log)} 筆執行紀錄<br>α＝{pipe.params['alpha']}，可依回饋再學習",
 ]
 for c, (name, color), txt in zip(cols, STAGES, stage_txt):
     c.markdown(f"<div style='background:{color};color:white;border-radius:10px;padding:10px 12px;"
@@ -134,23 +135,19 @@ with tab[0]:
                         f"<span style='background:{color};color:white;border-radius:6px;padding:2px 8px'>"
                         f"{d['執行模式']}</span>", unsafe_allow_html=True)
             key = f"{d['編號']}"
-            done = {r["編號"] for r in ss.log}
+            done = set(fb_log["編號"].astype(str))
             if key in done:
-                h2.success("已處理")
+                h2.success("已處理（見執行回饋）")
             elif d["執行模式"] == "人工確認":
                 b1, b2 = h2.columns(2)
                 if b1.button("核准", key="ok" + key):
-                    ss.log.append({"編號": key, "時間": ts, "設備": d["設備"], "動作": d["動作"], "結果": "核准執行",
-                                   "執行模式": d["執行模式"]})
+                    FB.record(d, "核准執行", ts, fc, s, pipe.params)
                     st.rerun()
                 if b2.button("駁回", key="no" + key):
-                    ss.log.append({"編號": key, "時間": ts, "設備": d["設備"], "動作": d["動作"], "結果": "駁回",
-                                   "執行模式": d["執行模式"]})
+                    FB.record(d, "駁回", ts, fc, s, pipe.params)
                     st.rerun()
             elif h2.button("送 SCADA 執行", key="run" + key):
-                ss.log.append({"編號": key, "時間": ts, "設備": d["設備"], "動作": d["動作"],
-                               "結果": "自動執行" if d["執行模式"] == "自動執行" else "PLC 安全規則",
-                               "執行模式": d["執行模式"]})
+                FB.record(d, "自動執行" if d["執行模式"] == "自動執行" else "PLC 安全規則", ts, fc, s, pipe.params)
                 st.rerun()
             nine = {k: d[k] for k in ["設備", "動作", "時間", "幅度", "理由", "預期效果", "風險", "人工確認", "Fallback"]}
             st.dataframe(pd.DataFrame([nine]), hide_index=True, width="stretch")
@@ -248,30 +245,52 @@ with tab[3]:
 
 # ---------------- 執行回饋 ----------------
 with tab[4]:
-    st.markdown("AI 提出決策 → SCADA 呈現、告警與管理流程 → PLC 保留安全連鎖與緊急控制。"
-                "低風險且已驗證：自動執行；高風險：人工確認；系統失效：Fallback 安全規則。")
-    if ss.log:
-        log = pd.DataFrame(ss.log)
-        eff, dec_ = pipe.params["aerator_effect"], pipe.params["effect_decay"]
-        gain3 = eff * sum(dec_ ** k for k in range(3))
-        hist_, sim_ = [], []
-        for r in log.itertuples():
-            t0 = pd.Timestamp(r.時間)
-            d0 = view.frame["DO"].get(t0)
-            d3 = view.frame["DO"].get(t0 + pd.Timedelta(hours=3))
-            ok = pd.notna(d0) and pd.notna(d3)
-            hist_.append(f"{d0:.2f} → {d3:.2f}" if ok else "—")
-            boost = gain3 if ("增氧機" in r.設備 and r.動作 == "啟動" and r.結果 != "駁回") else 0.0
-            sim_.append(f"{d0:.2f} → {d3 + boost:.2f}" if ok else "—")
-        log["DO 3 h 後：歷史實際（當時未採取）"] = hist_
-        log["DO 3 h 後：模擬執行後"] = sim_
-        st.dataframe(log, hide_index=True, width="stretch")
-        st.caption(f"模擬執行後＝歷史實際＋增氧機效果（{eff} mg/L/h，衰減 {dec_}，見 backtest/effect.py）。")
-        if st.button("清除紀錄"):
-            ss.log = []
-            st.rerun()
+    st.markdown("AI 提出決策 → SCADA 呈現、告警與管理流程 → PLC 保留安全連鎖與緊急控制 → **結果回傳、驗證、再學習**。"
+                "低風險且已驗證：自動執行；中高風險：人工確認；系統失效：Fallback 安全規則。")
+    if len(fb_log):
+        v = FB.verify(fb_log, pipe.frame, ts)
+        sm = FB.summary(v)
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("執行紀錄", sm["紀錄"])
+        m2.metric("預警已驗證", sm["預警已驗證"], help="決策後 6 小時，看 DO 是否真的低於 3.0（歷史資料，真實結果）")
+        m3.metric("預警成真率", f"{sm['預警成真率']:.0%}" if sm["預警成真率"] is not None else "—")
+        m4.metric("增氧決策駁回率", f"{sm['駁回率']:.0%}" if sm["駁回率"] is not None else "—")
+        show = v.drop(columns=["紀錄時間", "類別"]).copy()
+        show["決策時間"] = pd.to_datetime(show["決策時間"]).dt.strftime("%m/%d %H:00")
+        st.dataframe(show, hide_index=True, width="stretch")
+        st.caption("驗證以目前回放時間為準：回放超過決策後 6 小時才驗證。「模擬執行」＝歷史實際＋增氧機效果"
+                   f"（{pipe.params['aerator_effect']} mg/L/h，衰減 {pipe.params['effect_decay']}），"
+                   "因為回放資料裡 AI 的行動沒有真的發生；預警成真率與駁回率是真實回饋。")
     else:
-        st.info("在「決策與工單」核准或送出決策後，執行結果會回傳到這裡。")
+        st.info("在「決策與工單」核准、駁回或送出決策後，紀錄會存到 backtest/feedback.csv，並在回放時間經過後自動驗證。")
+
+    st.markdown("#### 依執行結果重新學習")
+    st.caption("只用目前回放時間以前的資料：前 2 週調 α、β，最後 1 週驗證；再依預警成真率與駁回率修正 α，寫回 decide/params.json。")
+    c1, c2 = st.columns([1, 3])
+    if c1.button("重新學習", type="primary"):
+        with st.spinner("重新學習中…"):
+            r = FB.relearn(pipe, ts, fb_log)
+        pipe.params.clear()
+        pipe.params.update(r["after"])
+        ss.relearn = r
+        st.rerun()
+    if c2.button("清除執行紀錄"):
+        FB.clear()
+        ss.pop("relearn", None)
+        st.rerun()
+    if ss.get("relearn"):
+        r = ss.relearn
+        b, a = r["before"], r["after"]
+        st.success(f"已更新 decide/params.json：α {b['alpha']} → {a['alpha']}、β {b['beta']} → {a['beta']}、"
+                   f"{'已驗證' if a['validated'] else '未驗證'}（之後的決策立即套用）")
+        for n in r["notes"]:
+            st.markdown(f"- {n}")
+        if r["validation"] is not None:
+            st.markdown("驗證期各策略（工程估計效果）：")
+            st.dataframe(r["validation"], width="stretch")
+    if FB.RELEARN_LOG.exists():
+        with st.expander("再學習紀錄"):
+            st.dataframe(pd.read_csv(FB.RELEARN_LOG), hide_index=True, width="stretch")
 
 # ---------------- 成效驗證 ----------------
 with tab[5]:
